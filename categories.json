@@ -1,0 +1,50 @@
+{
+  "categories": {
+    "memes": {
+      "channels": {
+        "UC7M_QoFOXa9MEVbfKSIeDSA": {
+          "name": "Reaktions Hugo"
+        },
+        "UCdC0An4ZPNr_YiFiYoVbwaw": {
+          "name": "Daily Dose Of Internet"
+        },
+        "UCKGMHVipEvuZudhHD05FOYA": {
+          "name": "Simplicissimus"
+        },
+        "UCFgBYlz5LwymPSWBX-G6hBA": {
+          "name": "2 Bored Guys"
+        },
+        "UCpnkp_D4FLPCiXOmDhoAeYA": {
+          "name": "UnusualVideos"
+        }
+      }
+    },
+    "doku": {
+      "channels": {
+        "UCLLibJTCy3sXjHLVaDimnpQ": {
+          "name": "ARTEde"
+        }
+      }
+    },
+    "food": {
+      "channels": {
+        "UCc9CjaAjsMMvaSghZB7-Kog": {
+          "name": "BeardMeatsFood"
+        },
+        "UCDZESjYAwh-ws7ZSZZ8DKeg": {
+          "name": "skippy62able"
+        }
+      }
+    },
+    "cs": {
+      "channels": {
+        "UCC6CbMzckAgAz-8MVul2IPA": {
+          "name": "Virre CS2"
+        },
+        "UCHtcNb0dDFEE1CCjufx0_HQ": {
+          "name": "Counter Strike Proland"
+        }
+      }
+    }
+  }
+}
