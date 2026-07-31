@@ -1,9 +1,6 @@
 import fs from 'fs';
-import { fileURLToPath } from 'url';
-import path from 'path';
 
 const src = fs.readFileSync('index.js','utf8');
-let lo = 0, hi = src.length;
 let attempt = 0;
 
 async function testSlice(start, end) {
@@ -13,15 +10,14 @@ async function testSlice(start, end) {
   try {
     await import(`file://${process.cwd().replace(/\\/g,'/')}/index_temp.js`);
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e && e.stack ? e.stack : e };
+  } catch (error) {
+    return { ok: false, error: error && error.stack ? error.stack : error };
   }
 }
 
 (async function(){
   // Narrow down by binary search on position
   let a = 0, b = src.length;
-  let errPos = -1;
   for (let i=0;i<20;i++) {
     const mid = Math.floor((a+b)/2);
     attempt++;
@@ -30,7 +26,6 @@ async function testSlice(start, end) {
     if (!r.ok) {
       // error in first half
       b = mid;
-      errPos = mid;
       console.log('Error found in first half');
     } else {
       // first half ok; error must be in second half

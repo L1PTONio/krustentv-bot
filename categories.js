@@ -13,7 +13,7 @@ async function loadCategories() {
   try {
     const data = await fs.readFile(CATEGORIES_FILE, 'utf-8');
     return JSON.parse(data);
-  } catch (error) {
+  } catch {
     return { categories: {} };
   }
 }

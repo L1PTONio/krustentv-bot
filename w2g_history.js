@@ -13,7 +13,7 @@ async function loadHistory() {
   try {
     const data = await fs.readFile(HISTORY_FILE, 'utf-8');
     return JSON.parse(data);
-  } catch (error) {
+  } catch {
     // Datei existiert nicht, erstelle neue Struktur
     return {
       seen: {},

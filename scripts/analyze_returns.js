@@ -4,7 +4,7 @@ const stack = [];
 let lastWord = '';
 for (let i=0;i<src.length;i++){
   const ch = src[i];
-  if (/\w/.test(ch)) lastWord += ch; else { if (lastWord.length>0) lastWord = lastWord; lastWord = ''; }
+  if (/\w/.test(ch)) lastWord += ch; else { if (lastWord.length>0) { lastWord = ''; } }
   // detect 'function' keyword ending at i
   if (i>=7 && src.slice(i-8+1,i+1)==='function') {
     lastWord = 'function';
@@ -28,7 +28,7 @@ stack.length = 0;
 lastWord = '';
 for (let i=0;i<src.length;i++){
   const ch = src[i];
-  if (/\w/.test(ch)) lastWord += ch; else { if (lastWord.length>0) {} lastWord = ''; }
+  if (/\w/.test(ch)) lastWord += ch; else { if (lastWord.length>0) { /* no-op */ } lastWord = ''; }
   if (i>=7 && src.slice(i-8+1,i+1)==='function') lastWord = 'function';
   if (src.slice(i-1,i+1)==='=>') lastWord = 'arrow';
   if (ch === '{') {

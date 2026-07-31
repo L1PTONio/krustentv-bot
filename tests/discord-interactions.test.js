@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 
 /**
  * Discord Interaction Mock Tests
@@ -611,7 +611,7 @@ describe('Discord Commands & Interactions', () => {
       // Try to defer again (would fail in real Discord)
       try {
         await interaction.deferUpdate();
-      } catch (e) {
+      } catch {
         // Already deferred
       }
 

@@ -153,7 +153,7 @@ export async function pushVideosToW2G(items) {
             errorMessage += '4. Rate-Limit überschritten (zu viele Requests)\n';
             errorMessage += '5. IP-Adresse wurde temporär blockiert';
           }
-        } catch (e) {
+        } catch {
           errorMessage += ` - ${responseText}`;
         }
         
@@ -197,7 +197,7 @@ export async function pushVideosToW2G(items) {
       
       // Wenn es ein Netzwerkfehler ist, nicht weiter versuchen
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        throw new Error(`Netzwerkfehler bei Watch2Gether: ${error.message}`);
+        throw new Error(`Netzwerkfehler bei Watch2Gether: ${error.message}`, { cause: error });
       }
       
       // Bei 403 oder 401 nicht weiter versuchen
@@ -266,7 +266,7 @@ export async function testW2GConnection() {
       try {
         const errorData = JSON.parse(responseText);
         errorMsg += ` - ${errorData.message || JSON.stringify(errorData)}`;
-      } catch (e) {
+      } catch {
         errorMsg += ` - ${responseText}`;
       }
       
@@ -318,7 +318,7 @@ export async function getCurrentPlaylist() {
       try {
         const errorData = JSON.parse(text);
         errMsg += ` - ${errorData.message || JSON.stringify(errorData)}`;
-      } catch (e) {
+      } catch {
         errMsg += ` - ${text}`;
       }
       throw new Error(errMsg);

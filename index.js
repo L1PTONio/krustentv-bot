@@ -3,14 +3,14 @@ import {
   Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
   TextInputBuilder, TextInputStyle, EmbedBuilder, MessageFlags,
-  PermissionsBitField, StringSelectMenuBuilder
+  StringSelectMenuBuilder
 } from 'discord.js';
 import * as categories from './categories.js';
 import * as youtube from './youtube.js';
 import * as w2g from './w2g_push.js';
 import * as history from './w2g_history.js';
-import { buildQueue, buildWeightedQueue, calculateTotalWatchtime } from './queue_builder.js';
-import { safeReply, safeDeferReply, safeDeferUpdate } from './interaction_utils.js';
+import { buildWeightedQueue } from './queue_builder.js';
+import { safeReply, safeDeferReply } from './interaction_utils.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
@@ -138,7 +138,7 @@ client.on('interactionCreate', async interaction => {
     try {
       const msg = error.message || 'Ein Fehler ist aufgetreten';
       await safeReply(interaction, { content: `❌ ${msg}`, flags: MessageFlags.Ephemeral });
-    } catch (e) {
+    } catch {
       console.error('❌ Konnte Fehlermeldung nicht senden');
     }
   }
@@ -1284,7 +1284,7 @@ async function handleCategoryHealth(interaction, userId) {
       const videoPromises = channelIds.map(async (channelId) => {
         try {
           return await youtube.getChannelVideos(channelId, 50);
-        } catch (err) {
+        } catch {
           console.warn(`⚠️ Fehler für ${channelId}`);
           return null;
         }
@@ -1400,7 +1400,7 @@ async function handleCategoryAdminAction(interaction, action, params, userId) {
       await showCategoryAdminMenu(interaction, userId);
       break;
 
-    case 'cat:list':
+    case 'cat:list': {
       const allCats = await categories.getCategories();
       const catList = Object.keys(allCats).length > 0
         ? Object.keys(allCats).map(c => `• ${c}`).join('\n')
@@ -1420,8 +1420,9 @@ async function handleCategoryAdminAction(interaction, action, params, userId) {
       
       await interaction.editReply({ embeds: [embed1], components: [row1] });
       break;
+    }
 
-    case 'cat:add':
+    case 'cat:add': {
       const addModal = new ModalBuilder()
         .setCustomId(`cat_add_modal_${userId}`)
         .setTitle('Neue Kategorie');
@@ -1438,8 +1439,9 @@ async function handleCategoryAdminAction(interaction, action, params, userId) {
 
       await interaction.showModal(addModal);
       break;
+    }
 
-    case 'cat:delete':
+    case 'cat:delete': {
       const delCats = await categories.getCategories();
       if (Object.keys(delCats).length === 0) {
         await interaction.editReply({ 
@@ -1471,8 +1473,9 @@ async function handleCategoryAdminAction(interaction, action, params, userId) {
 
       await interaction.editReply({ embeds: [delEmbed], components: [delRow] });
       break;
+    }
 
-    case 'cat:rename':
+    case 'cat:rename': {
       const renCats = await categories.getCategories();
       if (Object.keys(renCats).length === 0) {
         await interaction.editReply({ 
@@ -1504,15 +1507,16 @@ async function handleCategoryAdminAction(interaction, action, params, userId) {
 
       await interaction.editReply({ embeds: [renEmbed], components: [renRow] });
       break;
+    }
   }
 }
 
 // ==================== CHANNEL ADMIN HANDLERS ====================
 async function handleChannelAdminAction(interaction, action, params, userId) {
   switch (action) {
-    case 'ch:list':
+    case 'ch:list': {
       const allCats = await categories.getCategories();
-      let chLines = [];
+      const chLines = [];
       
       for (const [catName, catData] of Object.entries(allCats)) {
         chLines.push(`**${catName}:**`);
@@ -1540,8 +1544,9 @@ async function handleChannelAdminAction(interaction, action, params, userId) {
 
       await interaction.editReply({ embeds: [chEmbed], components: [chRow] });
       break;
+    }
 
-    case 'ch:add':
+    case 'ch:add': {
       const addChModal = new ModalBuilder()
         .setCustomId(`ch_add_modal_${userId}`)
         .setTitle('Channel hinzufügen');
@@ -1559,8 +1564,9 @@ async function handleChannelAdminAction(interaction, action, params, userId) {
 
       await interaction.showModal(addChModal);
       break;
+    }
 
-    case 'ch:remove':
+    case 'ch:remove': {
       const remCats = await categories.getCategories();
       const remChs = [];
 
@@ -1601,8 +1607,9 @@ async function handleChannelAdminAction(interaction, action, params, userId) {
 
       await interaction.editReply({ embeds: [remEmbed], components: [remRow] });
       break;
+    }
 
-    case 'ch:move':
+    case 'ch:move': {
       const movCats = await categories.getCategories();
       const movChs = [];
 
@@ -1643,6 +1650,7 @@ async function handleChannelAdminAction(interaction, action, params, userId) {
 
       await interaction.editReply({ embeds: [movEmbed], components: [movRow] });
       break;
+    }
   }
 }
 

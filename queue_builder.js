@@ -130,8 +130,6 @@ export async function buildWeightedQueue(categoryMap, targetMinutes, toleranceMi
     // We'll use weighted shuffle later
   }
 
-  const totalWeight = entries.reduce((s, e) => s + e.weight, 0);
-
   // Build a map for quick lookup
   const entriesByName = Object.fromEntries(entries.map(e => [e.name, { ...e }]));
 

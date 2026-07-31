@@ -12,7 +12,7 @@ let backup = null;
 beforeAll(async () => {
   try {
     backup = await fs.readFile(CATEGORIES_FILE, 'utf-8');
-  } catch (e) {
+  } catch {
     backup = null;
   }
   // start with a clean file

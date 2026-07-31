@@ -12,7 +12,7 @@ let backup = null;
 beforeAll(async () => {
   try {
     backup = await fs.readFile(HISTORY_FILE, 'utf-8');
-  } catch (e) {
+  } catch {
     backup = null;
   }
   // start with clean history

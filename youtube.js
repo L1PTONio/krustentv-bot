@@ -38,7 +38,7 @@ export async function resolveChannelId(input) {
   let decoded = input.trim();
   try {
     decoded = decodeURIComponent(decoded);
-  } catch (e) {
+  } catch {
     // Falls Dekodierung fehlschlägt, verwende Original
     decoded = input.trim();
   }
@@ -85,8 +85,8 @@ export async function resolveChannelId(input) {
   }
 
   /* ---------- 5. /c/ oder /user/ URL - Extrahiere Identifier und suche ---------- */
-  const cMatch = decoded.match(/youtube\.com\/c\/([^\/\s\?&#]+)/i);
-  const userMatch = decoded.match(/youtube\.com\/user\/([^\/\s\?&#]+)/i);
+  const cMatch = decoded.match(/youtube\.com\/c\/([^/\s?&#]+)/i);
+  const userMatch = decoded.match(/youtube\.com\/user\/([^/\s?&#]+)/i);
   
   if (cMatch || userMatch) {
     const identifier = (cMatch?.[1] || userMatch?.[1] || '').trim();
@@ -280,13 +280,13 @@ async function resolveViaHtml(url) {
             }
           }
         }
-      } catch (e) {
+      } catch {
         // JSON-Parsing fehlgeschlagen, ignoriere
       }
     }
 
     return null;
-  } catch (error) {
+  } catch {
     // Fehler stillschweigend ignorieren, da dies ein Fallback ist
     return null;
   }
@@ -304,8 +304,8 @@ async function searchAndVerify(query) {
   // Extrahiere Identifier aus URL falls vorhanden
   let searchQuery = query;
   if (query.includes('youtube.com')) {
-    const cMatch = query.match(/\/c\/([^\/\s\?&#]+)/i);
-    const userMatch = query.match(/\/user\/([^\/\s\?&#]+)/i);
+    const cMatch = query.match(/\/c\/([^/\s?&#]+)/i);
+    const userMatch = query.match(/\/user\/([^/\s?&#]+)/i);
     const handleMatch = query.match(/@([a-zA-Z0-9._-]+)/);
     
     if (cMatch) {
