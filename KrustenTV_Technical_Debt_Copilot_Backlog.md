@@ -14,7 +14,7 @@ Die Prompts sind absichtlich klein geschnitten. **Immer nur einen Prompt umsetze
 
 Diese Entscheidungen gelten für alle Tickets und sollen nicht in jedem Ticket neu diskutiert werden:
 
-1. **Runtime:** Node.js `>=20`, npm, ESM. Kein Wechsel zu TypeScript im Rahmen dieses Backlogs.
+1. **Runtime:** Node.js `>=22`, npm, ESM. Kein Wechsel zu TypeScript im Rahmen dieses Backlogs.
 2. **Sprache:** Englische Bezeichner im Code; deutsche, nutzergerichtete Discord-Texte bleiben deutsch.
 3. **Persistenz:** SQLite über `better-sqlite3`, ohne ORM. Eine lokale Datei ist für einen einzelnen Bot-Prozess ausreichend und leicht zu sichern.
 4. **Datenbankpfad:** Standard `data/krustentv.sqlite`, überschreibbar über `DATABASE_PATH`.
@@ -173,7 +173,7 @@ Kontext:
 
 Aufgaben:
 1. Ergänze in package.json:
-   - engines.node = ">=20"
+   - engines.node = ">=22"
    - scripts: lint, test:coverage, check und check:syntax.
    - check soll mindestens lint, check:syntax und test ausführen.
    - Ändere package-lock.json ausschließlich über npm-Kommandos, niemals manuell.

@@ -17,7 +17,7 @@ Diese Liste bündelt die letzten Schritte, bis der Bot sauber in die Beta-Phase 
 - [ ] Admin-User und Rollen für den Beta-Betrieb final prüfen
 
 ## 3. Hosting auf bot-hosting.net
-- [ ] Node.js-Laufzeit passend zur Projektanforderung auswählen (empfohlen: Node 20+)
+- [ ] Node.js-Laufzeit passend zur Projektanforderung auswählen (empfohlen: Node 22+)
 - [ ] Repository/Branch für den Hosting-Deploy auswählen
 - [ ] Startbefehl festlegen: `npm start`
 - [ ] Installationsbefehl festlegen: `npm install`

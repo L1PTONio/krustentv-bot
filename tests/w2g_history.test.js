@@ -65,3 +65,55 @@ test('isCacheValid resets after 12:00 logic', async () => {
   const result = await history.isCacheValid();
   expect(typeof result).toBe('boolean');
 });
+
+test('markVideosPushed stores release and push timestamps', async () => {
+  const nowBefore = Date.now();
+  await history.markVideosPushed([
+    {
+      id: 'VID_PUSH_1',
+      title: 'Video Eins',
+      publishedAt: '2026-07-01T10:00:00.000Z'
+    },
+    {
+      id: 'VID_PUSH_2',
+      title: 'Video Zwei',
+      publishedAt: '2026-07-02T10:00:00.000Z'
+    }
+  ]);
+
+  const recent = await history.getRecentPushedVideos(10);
+  expect(recent.length).toBeGreaterThanOrEqual(2);
+  expect(recent[0].id).toBe('VID_PUSH_2');
+  expect(recent[1].id).toBe('VID_PUSH_1');
+  expect(recent[0].publishedAt).toBe('2026-07-02T10:00:00.000Z');
+
+  const pushedAtDate = new Date(recent[0].pushedAt).getTime();
+  expect(Number.isNaN(pushedAtDate)).toBe(false);
+  expect(pushedAtDate).toBeGreaterThanOrEqual(nowBefore);
+  expect(await history.isVideoSeen('VID_PUSH_1')).toBe(true);
+});
+
+test('getRecentPushedVideos enforces max of 100', async () => {
+  const sample = Array.from({ length: 120 }, (_, index) => ({
+    id: `VID_CAP_${index}`,
+    title: `Video ${index}`,
+    publishedAt: '2026-08-01T00:00:00.000Z'
+  }));
+
+  await history.markVideosPushed(sample);
+  const recent = await history.getRecentPushedVideos(999);
+  expect(recent.length).toBe(100);
+});
+
+test('clearWatchHistory removes seen and pushed data', async () => {
+  await history.markVideosPushed([
+    { id: 'CLEAR_1', title: 'Clear 1', publishedAt: '2026-08-01T10:00:00.000Z' }
+  ]);
+  expect(await history.isVideoSeen('CLEAR_1')).toBe(true);
+  expect((await history.getRecentPushedVideos(10)).length).toBeGreaterThan(0);
+
+  await history.clearWatchHistory();
+
+  expect(await history.isVideoSeen('CLEAR_1')).toBe(false);
+  expect(await history.getRecentPushedVideos(10)).toEqual([]);
+});

@@ -13,7 +13,7 @@ Ein stabiler, aber noch beta-gestützter Discord-Bot, der automatisch neue YouTu
 - Sauberes Fehler‑Handling & UX‑konforme Interaction‑Antworten
 
 ## ⚙️ Voraussetzungen
-- Node.js 18+ (ESM, `type: "module"` in `package.json`)
+- Node.js 22+ (ESM, `type: "module"` in `package.json`)
 - Discord Application (Bot Token, Client ID)
 - YouTube Data API Key (v3)
 - Watch2Gether API Key + Room ID (streamkey)
@@ -67,7 +67,7 @@ Für schnelle Slash-Command-Entwicklung: setze `DISCORD_GUILD_ID` → Commands w
 
 ## 🚀 Hosting auf bot-hosting.net
 Für den Beta-Deploy auf bot-hosting.net sind folgende Punkte wichtig:
-- Node.js 20+ verwenden
+- Node.js 22+ verwenden
 - `npm install` als Installationsbefehl setzen
 - `npm start` als Startbefehl setzen
 - Eine `.env`-Datei mit den echten Secrets im Host-Setup hinterlegen

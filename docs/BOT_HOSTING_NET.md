@@ -1,7 +1,7 @@
 # bot-hosting.net Setup für den KrüstchenTV-Bot
 
 ## Empfohlene Runtime
-- Node.js 20+
+- Node.js 22+
 - npm
 - 1 CPU / 512 MB RAM reichen für die Beta-Phase aus, sofern keine hohen Parallelitäten erwartet werden
 

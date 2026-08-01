@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import {
   Client, GatewayIntentBits, REST, Routes,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
@@ -18,19 +19,140 @@ import { createCommandDefinitions } from './src/discord/commandDefinitions.js';
 import { createAuthorizationService } from './src/services/authorizationService.js';
 import { buildMemberContext } from './src/discord/memberContext.js';
 import { createFlowSessionStore } from './src/services/flowSessionStore.js';
+import { createRuntimeSettingsStore } from './src/services/runtimeSettingsStore.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
 });
+const require = createRequire(import.meta.url);
+const packageJson = require('./package.json');
+const APP_VERSION = packageJson?.version || '0.0.0';
 
 // ==================== CONFIGURATION ====================
 let config = null;
 let rest = null;
 let app = null;
+let runtimeMinVideoPublishedAt = null;
 let errorHandlersRegistered = false;
 const commands = createCommandDefinitions();
 const authorizationService = createAuthorizationService();
 const flowSessionStore = createFlowSessionStore({ storagePath: './data/flow-sessions.json' });
+const runtimeSettingsStore = createRuntimeSettingsStore({ storagePath: './data/runtime-settings.json' });
+
+function parseIsoDateOrNull(value) {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+
+  const parsed = new Date(value.trim());
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function parseAdminMinPublishedAtInput(value) {
+  if (!value || typeof value !== 'string') {
+    return undefined;
+  }
+
+  const raw = value.trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  // Accept YYYY-MM-DD for convenience and normalize date-only input to 00:01 UTC.
+  const isoDateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDateMatch) {
+    const year = Number.parseInt(isoDateMatch[1], 10);
+    const month = Number.parseInt(isoDateMatch[2], 10);
+    const day = Number.parseInt(isoDateMatch[3], 10);
+
+    const parsed = new Date(Date.UTC(year, month - 1, day, 0, 1, 0, 0));
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day
+    ) {
+      return undefined;
+    }
+
+    return parsed;
+  }
+
+  // Accept raw ISO values as-is.
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) {
+    return direct;
+  }
+
+  // Accept German-friendly format: DD.MM.YYYY or DD.MM.YYYY HH:mm.
+  const deMatch = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?$/);
+  if (deMatch) {
+    const day = Number.parseInt(deMatch[1], 10);
+    const month = Number.parseInt(deMatch[2], 10);
+    const year = Number.parseInt(deMatch[3], 10);
+    const hasExplicitTime = Boolean(deMatch[4]);
+    const hour = hasExplicitTime ? Number.parseInt(deMatch[4], 10) : 0;
+    const minute = hasExplicitTime ? Number.parseInt(deMatch[5], 10) : 1;
+
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return undefined;
+    }
+
+    const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day ||
+      parsed.getUTCHours() !== hour ||
+      parsed.getUTCMinutes() !== minute
+    ) {
+      return undefined;
+    }
+
+    return parsed;
+  }
+
+  return undefined;
+}
+
+function formatIsoOrDisabled(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return 'deaktiviert';
+  }
+  return date.toISOString();
+}
+
+function formatDateForAdminDisplay(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return 'deaktiviert';
+  }
+
+  return date.toLocaleString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC'
+  }) + ' UTC';
+}
+
+function formatDateForAdminInput(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = String(date.getUTCFullYear());
+  const hour = String(date.getUTCHours()).padStart(2, '0');
+  const minute = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${day}.${month}.${year} ${hour}:${minute}`;
+}
 
 function registerGlobalErrorHandlers() {
   if (errorHandlersRegistered) {
@@ -59,6 +181,10 @@ async function startApplication() {
   registerGlobalErrorHandlers();
 
   authorizationService.configure(config);
+
+  const runtimeSettings = await runtimeSettingsStore.readSettings();
+  const persistedCutoff = parseIsoDateOrNull(runtimeSettings.minVideoPublishedAt);
+  runtimeMinVideoPublishedAt = persistedCutoff || config.video.minPublishedAt || null;
 
   youtube.configureYouTubeService({ apiKey: config.youtube.apiKey });
   w2g.configureW2GService({
@@ -228,7 +354,7 @@ async function showMainMenu(interaction) {
     .setColor(0x5865F2)
     .setThumbnail(client.user.avatarURL());
 
-  const row = new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`nav:tv_start:${interaction.user.id}`)
       .setLabel('🎬 TV START')
@@ -243,7 +369,197 @@ async function showMainMenu(interaction) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  await interaction.editReply({ embeds: [embed], components: [row] });
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`nav:discovery:${interaction.user.id}`)
+      .setLabel('🔎 DISCOVERY')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+}
+
+function formatVideoLength(durationSeconds) {
+  const totalSeconds = Math.max(0, Number(durationSeconds) || 0);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+function truncateTitle(value, maxLength = 90) {
+  const title = typeof value === 'string' ? value.trim() : '';
+  if (!title) return 'Unbekanntes Video';
+  if (title.length <= maxLength) return title;
+  return `${title.slice(0, maxLength - 3)}...`;
+}
+
+function buildDiscoverySections(discoveryData) {
+  const sections = [];
+
+  for (const [catName, catData] of Object.entries(discoveryData)) {
+    const videos = Array.isArray(catData?.videos) ? catData.videos : [];
+    const header = `**${catName}** (${videos.length} Videos)`;
+
+    if (videos.length === 0) {
+      sections.push(`${header}\n*(keine verfügbaren Videos)*`);
+      continue;
+    }
+
+    const lines = videos.map((video, index) => {
+      const title = truncateTitle(video.title);
+      return `${index + 1}. ${title} (${formatVideoLength(video.duration)})`;
+    });
+
+    let block = `${header}\n`;
+    let part = 1;
+
+    for (const line of lines) {
+      if ((block + line + '\n').length > 1800) {
+        sections.push(part === 1 ? block.trimEnd() : `${header} - Teil ${part}\n${block.split('\n').slice(1).join('\n').trimEnd()}`);
+        block = `${header}\n`;
+        part += 1;
+      }
+      block += `${line}\n`;
+    }
+
+    if (block.trim()) {
+      sections.push(part === 1 ? block.trimEnd() : `${header} - Teil ${part}\n${block.split('\n').slice(1).join('\n').trimEnd()}`);
+    }
+  }
+
+  return sections;
+}
+
+function buildDiscoveryEmbeds(discoveryData) {
+  const sections = buildDiscoverySections(discoveryData);
+  const embeds = [];
+  const maxEmbeds = 10;
+  let currentText = '';
+
+  for (const section of sections) {
+    const candidate = currentText ? `${currentText}\n\n${section}` : section;
+    if (candidate.length > 3800) {
+      embeds.push(currentText);
+      currentText = section;
+      if (embeds.length >= maxEmbeds) {
+        break;
+      }
+    } else {
+      currentText = candidate;
+    }
+  }
+
+  if (currentText && embeds.length < maxEmbeds) {
+    embeds.push(currentText);
+  }
+
+  const totalVideos = Object.values(discoveryData).reduce((sum, cat) => sum + (cat.videos?.length || 0), 0);
+  const totalCategories = Object.keys(discoveryData).length;
+
+  const result = embeds.map((text, index) => new EmbedBuilder()
+    .setTitle('🔎 DISCOVERY - Verfügbare Videos')
+    .setDescription(text)
+    .setColor(0x5865F2)
+    .setFooter({
+      text: `Kategorien: ${totalCategories} • Videos: ${totalVideos} • Seite ${index + 1}/${embeds.length}`
+    }));
+
+  const truncated = sections.length > 0 && embeds.length === maxEmbeds && sections.join('\n\n').length > embeds.join('').length;
+  if (truncated && result.length > 0) {
+    result[result.length - 1].addFields({
+      name: '⚠️ Hinweis',
+      value: 'Nicht alle Einträge konnten in einer Nachricht angezeigt werden (Discord-Limit).',
+      inline: false
+    });
+  }
+
+  return result;
+}
+
+async function collectDiscoveryData() {
+  const allCategories = await categories.getCategories();
+  const discoveryData = {};
+
+  const categoryPromises = Object.entries(allCategories).map(async ([catName, catData]) => {
+    const channels = catData.channels || {};
+    const channelEntries = Object.entries(channels);
+
+    const channelResults = await Promise.all(
+      channelEntries.map(async ([channelId]) => {
+        try {
+          const channelVideos = await youtube.getChannelVideos(channelId, 50);
+          return await history.filterUnseenVideos(channelVideos, runtimeMinVideoPublishedAt);
+        } catch (error) {
+          console.warn(`⚠️ Discovery Fehler für Channel ${channelId}: ${error.message}`);
+          return [];
+        }
+      })
+    );
+
+    const videos = channelResults.flat();
+    const enrichedVideos = await Promise.all(videos.map(async video => {
+      try {
+        const details = await youtube.getVideoDetails(video.id);
+        return {
+          ...video,
+          duration: details?.duration || 0
+        };
+      } catch {
+        return {
+          ...video,
+          duration: 0
+        };
+      }
+    }));
+
+    discoveryData[catName] = {
+      videos: enrichedVideos
+    };
+  });
+
+  await Promise.all(categoryPromises);
+  return discoveryData;
+}
+
+async function showDiscovery(interaction) {
+  try {
+    await interaction.editReply({ content: '🔎 Sammle verfügbare Videos für Discovery...' });
+    const discoveryData = await collectDiscoveryData();
+    const embeds = buildDiscoveryEmbeds(discoveryData);
+
+    if (embeds.length === 0) {
+      const emptyEmbed = new EmbedBuilder()
+        .setTitle('🔎 DISCOVERY - Verfügbare Videos')
+        .setDescription('Es sind aktuell keine verfügbaren Videos in den Kategorien vorhanden.')
+        .setColor(0x5865F2);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`nav:main:${interaction.user.id}`)
+          .setLabel('⬅️ Hauptmenü')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await interaction.editReply({ content: null, embeds: [emptyEmbed], components: [row] });
+      return;
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`nav:discovery:${interaction.user.id}`)
+        .setLabel('🔄 Neu laden')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`nav:main:${interaction.user.id}`)
+        .setLabel('⬅️ Hauptmenü')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.editReply({ content: null, embeds, components: [row] });
+  } catch (error) {
+    console.error('❌ Discovery Fehler:', error);
+    await interaction.editReply({ content: `❌ Discovery fehlgeschlagen: ${error.message}` });
+  }
 }
 
 // ==================== TV START FLOW ====================
@@ -284,7 +600,7 @@ async function startTVFlow(interaction) {
         channelEntries.map(async ([channelId]) => {
           try {
             const channelVideos = await youtube.getChannelVideos(channelId, 50);
-            const unseenVideos = await history.filterUnseenVideos(channelVideos);
+            const unseenVideos = await history.filterUnseenVideos(channelVideos, runtimeMinVideoPublishedAt);
             console.log(`      ✓ ${channelId}: ${unseenVideos.length} Videos`);
             return unseenVideos;
           } catch (error) {
@@ -415,9 +731,13 @@ async function startTVFlow(interaction) {
 
 // ==================== ADMIN FLOW ====================
 async function showAdminMenu(interaction) {
+  const currentMinPublishedAt = runtimeMinVideoPublishedAt
+    ? `${formatDateForAdminDisplay(runtimeMinVideoPublishedAt)}\nISO: ${runtimeMinVideoPublishedAt.toISOString()}`
+    : 'deaktiviert';
+
   const embed = new EmbedBuilder()
     .setTitle('🛠️ ADMIN-BEREICH')
-    .setDescription('Verwalte den Bot')
+    .setDescription(`Verwalte den Bot\n\n📅 MIN_VIDEO_PUBLISHED_AT: ${currentMinPublishedAt}`)
     .setColor(0xF0B132);
 
   const row1 = new ActionRowBuilder().addComponents(
@@ -439,10 +759,18 @@ async function showAdminMenu(interaction) {
     new ButtonBuilder()
       .setCustomId(`admin:maintenance:${interaction.user.id}`)
       .setLabel('🧹 Wartung')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`admin:history:${interaction.user.id}`)
+      .setLabel('🕘 Push-History')
       .setStyle(ButtonStyle.Primary)
   );
 
   const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`admin:min_published_at:${interaction.user.id}`)
+      .setLabel('📅 Min Video-Datum')
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`nav:main:${interaction.user.id}`)
       .setLabel('⬅️ Hauptmenü')
@@ -454,12 +782,11 @@ async function showAdminMenu(interaction) {
 
 // ==================== HELP ====================
 async function showVersion(interaction) {
-  const version = '1.0.0-beta';
   const embed = new EmbedBuilder()
     .setTitle('🔢 KrüstchenTV Version')
     .setDescription('Aktuelle Bot-Version')
     .setColor(0x5865F2)
-    .addFields({ name: 'Version', value: version, inline: false })
+    .addFields({ name: 'Version', value: APP_VERSION, inline: false })
     .setFooter({ text: 'KrüstchenTV Bot' })
     .setTimestamp();
 
@@ -471,7 +798,7 @@ async function showHelp(interaction) {
     .setTitle('📖 KRÜSTCHENTV BOT - KOMPLETTE ANLEITUNG')
     .setDescription('Alle verfügbaren Slash Commands und Funktionen im Überblick. Diese Beta-Version ist für privaten Freundes- und Testbetrieb gedacht.')
     .setColor(0x2ECC71)
-    .addFields({ name: 'Version', value: 'Beta', inline: false })
+    .addFields({ name: 'Version', value: APP_VERSION, inline: false })
     .addFields(
       {
         name: '⚡ Verfügbare Slash Commands',
@@ -514,11 +841,18 @@ async function showHelp(interaction) {
           '├ Hinzufügen: YouTube-Channel zu Kategorie hinzufügen\n' +
           '├ Entfernen: Channel aus Kategorie löschen\n' +
           '└ Verschieben: Channel in andere Kategorie verschieben\n\n' +
+          '**🕘 Push-History**\n' +
+          '└ Zeigt die zuletzt zu W2G gepushten Videos\n' +
+          '└ Mit Veröffentlichungs- und Push-Zeitpunkt\n\n' +
+          '**📅 Min Video-Datum**\n' +
+          '└ Setzt MIN_VIDEO_PUBLISHED_AT direkt im Admin-Menü\n' +
+          '└ Gilt sofort für neue TV-Starts\n\n' +
           '**🧹 Wartung**\n' +
           '├ Health Check: Kategorien-Gesundheit prüfen\n' +
           '│  └ Zeigt letzte Uploads aller Channels\n' +
           '│  └ ✅ Aktiv (< 7 Tage) / ⚠️ Inaktiv (7-30 Tage) / ❌ Tot (> 30 Tage)\n' +
-          '└ W2G Test: Watch2Gether API-Verbindung testen',
+          '├ W2G Test: Watch2Gether API-Verbindung testen\n' +
+          '└ Watch-History löschen: Entfernt Test-History mit Bestätigung',
         inline: false
       },
       {
@@ -566,7 +900,9 @@ async function handleButtonPress(interaction, action, params) {
   // Check if this is a modal button (don't defer if modal)
   const isModalButton = (action === 'tv' && params[0] === 'watchtime_custom') ||
                         (action === 'cat' && params[0] === 'add') ||
-                        (action === 'ch' && params[0] === 'add');
+                        (action === 'ch' && params[0] === 'add') ||
+                        (action === 'admin' && params[0] === 'history') ||
+                        (action === 'admin' && params[0] === 'min_published_at');
   
   if (!isModalButton) {
     // WICHTIG: deferUpdate() SOFORT ZUERST, bevor 3 Sekunden vergehen!
@@ -606,6 +942,9 @@ async function handleButtonPress(interaction, action, params) {
         break;
       case 'help':
         await showHelp(interaction);
+        break;
+      case 'discovery':
+        await showDiscovery(interaction);
         break;
     }
     return;
@@ -878,7 +1217,52 @@ async function handleAdminButton(interaction, params, userId) {
     case 'maintenance':
       await showMaintenanceMenu(interaction, userId);
       break;
+    case 'history':
+      await showAdminPushHistoryModal(interaction, userId);
+      break;
+    case 'min_published_at':
+      await showAdminMinPublishedAtModal(interaction, userId);
+      break;
   }
+}
+
+async function showAdminMinPublishedAtModal(interaction, userId) {
+  const modal = new ModalBuilder()
+    .setCustomId(`admin_min_published_modal_${userId}`)
+    .setTitle('MIN_VIDEO_PUBLISHED_AT setzen');
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('min_video_published_at')
+        .setLabel('Datum (z.B. 01.08.2026 oder 01.08.2026 14:30)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('leer/deaktiviert = aus')
+        .setValue(formatDateForAdminInput(runtimeMinVideoPublishedAt))
+    )
+  );
+
+  await interaction.showModal(modal);
+}
+
+async function showAdminPushHistoryModal(interaction, userId) {
+  const modal = new ModalBuilder()
+    .setCustomId(`admin_history_modal_${userId}`)
+    .setTitle('Push-History anzeigen');
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('history_limit')
+        .setLabel('Wie viele Einträge? (1-100)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder('z.B. 20')
+    )
+  );
+
+  await interaction.showModal(modal);
 }
 
 async function handleMaintenanceButton(interaction, params, userId) {
@@ -897,6 +1281,15 @@ async function handleMaintenanceButton(interaction, params, userId) {
       break;
     case 'w2g_test':
       await handleW2GTest(interaction, userId);
+      break;
+    case 'clear_history':
+      await showClearWatchHistoryConfirmation(interaction, userId);
+      break;
+    case 'clear_history_confirm':
+      await handleClearWatchHistory(interaction, userId);
+      break;
+    case 'clear_history_cancel':
+      await showMaintenanceMenu(interaction, userId);
       break;
   }
 }
@@ -1036,12 +1429,54 @@ async function showMaintenanceMenu(interaction, userId) {
 
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
+      .setCustomId(`maint:clear_history:${userId}`)
+      .setLabel('🗑️ Watch-History löschen')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
       .setCustomId(`admin:main:${userId}`)
       .setLabel('⬅️ Admin-Menü')
       .setStyle(ButtonStyle.Secondary)
   );
 
   await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+}
+
+async function showClearWatchHistoryConfirmation(interaction, userId) {
+  const embed = new EmbedBuilder()
+    .setTitle('⚠️ WATCH-HISTORY LÖSCHEN')
+    .setDescription('Möchtest du wirklich alle gespeicherten Watch-/Push-History-Einträge löschen?\n\nDiese Aktion ist für Test-Cleanup gedacht und kann nicht rückgängig gemacht werden.')
+    .setColor(0xED4245);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`maint:clear_history_confirm:${userId}`)
+      .setLabel('✅ Ja, löschen')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`maint:clear_history_cancel:${userId}`)
+      .setLabel('⬅️ Abbrechen')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  await interaction.editReply({ embeds: [embed], components: [row] });
+}
+
+async function handleClearWatchHistory(interaction, userId) {
+  await history.clearWatchHistory();
+
+  const embed = new EmbedBuilder()
+    .setTitle('✅ WATCH-HISTORY GELÖSCHT')
+    .setDescription('Die gespeicherte Watch-/Push-History wurde entfernt.')
+    .setColor(0x57F287);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`admin:maintenance:${userId}`)
+      .setLabel('⬅️ Wartung')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  await interaction.editReply({ embeds: [embed], components: [row] });
 }
 
 // ==================== TV FLOW HELPERS ====================
@@ -1300,10 +1735,9 @@ async function buildAndPushQueue(interaction, session, userId) {
     await w2g.pushVideosToW2G(w2gItems);
     console.log(`      ✅ W2G Push erfolgreich`);
 
-    // Mark as seen
-    const videoIds = queueResult.queue.map(v => v.id);
-    await history.markVideosSeen(videoIds);
-    console.log(`      ✅ ${videoIds.length} Videos als gesehen markiert`);
+    // Mark as seen and persist push-history metadata for admin views.
+    await history.markVideosPushed(queueResult.queue);
+    console.log(`      ✅ ${queueResult.queue.length} Videos als gesehen markiert`);
 
     // Result
     const w2gRoomUrl = w2g.getW2GRoomUrl();
@@ -1497,6 +1931,82 @@ async function handleW2GPlaylist(interaction, userId) {
     console.error('❌ Playlist Fehler:', error);
     await interaction.editReply({ content: `❌ ${error.message}` });
   }
+}
+
+function formatDateForHistory(value) {
+  if (!value) return 'Unbekannt';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unbekannt';
+  return date.toLocaleString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function buildHistoryDescription(entries, offset) {
+  return entries.map((entry, index) => {
+    const rank = offset + index + 1;
+    const title = entry.title && entry.title.trim().length > 0
+      ? entry.title.trim()
+      : `Video ${entry.id}`;
+    const compactTitle = title.length > 110 ? `${title.slice(0, 107)}...` : title;
+    return `**${rank}.** ${compactTitle}\nVeröffentlicht: ${formatDateForHistory(entry.publishedAt)}\nZu W2G gepusht: ${formatDateForHistory(entry.pushedAt)}`;
+  }).join('\n\n');
+}
+
+async function showAdminPushHistory(interaction, userId, limit) {
+  const pushedEntries = await history.getRecentPushedVideos(limit);
+
+  if (pushedEntries.length === 0) {
+    const emptyEmbed = new EmbedBuilder()
+      .setTitle('🕘 PUSH-HISTORY')
+      .setDescription('Noch keine W2G-Pushes gespeichert.')
+      .setColor(0x5865F2);
+
+    const backRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`admin:main:${userId}`)
+        .setLabel('⬅️ Admin-Menü')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.editReply({ embeds: [emptyEmbed], components: [backRow] });
+    return;
+  }
+
+  const chunkSize = 10;
+  const embeds = [];
+
+  for (let i = 0; i < pushedEntries.length; i += chunkSize) {
+    const chunk = pushedEntries.slice(i, i + chunkSize);
+    const page = Math.floor(i / chunkSize) + 1;
+    const pageCount = Math.ceil(pushedEntries.length / chunkSize);
+    const offset = i;
+
+    const embed = new EmbedBuilder()
+      .setTitle('🕘 PUSH-HISTORY')
+      .setDescription(buildHistoryDescription(chunk, offset))
+      .setColor(0x5865F2)
+      .setFooter({ text: `Einträge: ${pushedEntries.length} • Seite ${page}/${pageCount}` });
+
+    embeds.push(embed);
+  }
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`admin:history:${userId}`)
+      .setLabel('🔢 Anzahl ändern')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`admin:main:${userId}`)
+      .setLabel('⬅️ Admin-Menü')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  await interaction.editReply({ embeds, components: [row] });
 }
 
 // ==================== CATEGORY ADMIN HANDLERS ====================
@@ -2144,6 +2654,101 @@ async function handleModalSubmit(interaction, action, params) {
       .setColor(0x3498DB);
 
     await interaction.editReply({ embeds: [catEmbed], components: [catRow] });
+    return;
+  }
+
+  if (action === 'admin_history_modal') {
+    const rawLimit = interaction.fields.getTextInputValue('history_limit').trim();
+    const limit = Number.parseInt(rawLimit, 10);
+
+    if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
+      await interaction.editReply({
+        content: '❌ Bitte gib eine Zahl zwischen 1 und 100 ein.',
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`admin:history:${userId}`)
+              .setLabel('🔁 Erneut eingeben')
+              .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setCustomId(`admin:main:${userId}`)
+              .setLabel('⬅️ Admin-Menü')
+              .setStyle(ButtonStyle.Secondary)
+          )
+        ]
+      });
+      return;
+    }
+
+    await showAdminPushHistory(interaction, userId, limit);
+    return;
+  }
+
+  if (action === 'admin_min_published_modal') {
+    const rawInput = interaction.fields.getTextInputValue('min_video_published_at').trim();
+
+    if (!rawInput || rawInput.toLowerCase() === 'deaktiviert' || rawInput.toLowerCase() === 'off') {
+      runtimeMinVideoPublishedAt = null;
+      await runtimeSettingsStore.writeSettings({ minVideoPublishedAt: null });
+
+      const embed = new EmbedBuilder()
+        .setTitle('✅ MIN_VIDEO_PUBLISHED_AT aktualisiert')
+        .setDescription('Filter ist jetzt **deaktiviert**. Es werden wieder alle Veröffentlichungsdaten berücksichtigt.')
+        .setColor(0x57F287)
+        .addFields({ name: 'Aktueller Wert', value: 'deaktiviert', inline: false });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`admin:main:${userId}`)
+          .setLabel('⬅️ Admin-Menü')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+      return;
+    }
+
+    const parsed = parseAdminMinPublishedAtInput(rawInput);
+    if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
+      await interaction.editReply({
+        content: '❌ Ungültiges Datum. Erlaubt: 01.08.2026, 01.08.2026 14:30, 2026-08-01 oder ISO.',
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`admin:min_published_at:${userId}`)
+              .setLabel('🔁 Erneut eingeben')
+              .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setCustomId(`admin:main:${userId}`)
+              .setLabel('⬅️ Admin-Menü')
+              .setStyle(ButtonStyle.Secondary)
+          )
+        ]
+      });
+      return;
+    }
+
+    runtimeMinVideoPublishedAt = parsed;
+    const normalizedIso = parsed.toISOString();
+    await runtimeSettingsStore.writeSettings({ minVideoPublishedAt: normalizedIso });
+
+    const embed = new EmbedBuilder()
+      .setTitle('✅ MIN_VIDEO_PUBLISHED_AT aktualisiert')
+      .setDescription('Der Filter wurde gespeichert und gilt ab sofort für neue TV-Starts.')
+      .setColor(0x57F287)
+      .addFields(
+        { name: 'Aktueller Wert (lesbar)', value: formatDateForAdminDisplay(runtimeMinVideoPublishedAt), inline: false },
+        { name: 'Aktueller Wert (ISO)', value: formatIsoOrDisabled(runtimeMinVideoPublishedAt), inline: false }
+      );
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`admin:main:${userId}`)
+        .setLabel('⬅️ Admin-Menü')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [row] });
     return;
   }
 

@@ -19,6 +19,7 @@ describe('w2g_history.filterUnseenVideos date cutoff', () => {
   });
 
   it('keeps only videos published at or after 2026-01-01', async () => {
+    const cutoffDate = new Date('2026-01-01T00:00:00Z');
     const videos = [
       { id: 'old1', publishedAt: '2025-12-31T23:59:59Z' },
       { id: 'edge', publishedAt: '2026-01-01T00:00:00Z' },
@@ -26,7 +27,7 @@ describe('w2g_history.filterUnseenVideos date cutoff', () => {
       { id: 'nodate' },
     ];
 
-    const result = await filterUnseenVideos(videos);
+    const result = await filterUnseenVideos(videos, cutoffDate);
     const ids = result.map(v => v.id);
     expect(ids).toContain('edge');
     expect(ids).toContain('new1');
@@ -36,6 +37,7 @@ describe('w2g_history.filterUnseenVideos date cutoff', () => {
   });
 
   it('excludes seen videos regardless of date', async () => {
+    const cutoffDate = new Date('2026-01-01T00:00:00Z');
     // Mark one video as seen
     const data = JSON.parse(await fs.readFile(historyPath, 'utf-8'));
     data.seen['edge'] = true;
@@ -46,9 +48,22 @@ describe('w2g_history.filterUnseenVideos date cutoff', () => {
       { id: 'new1', publishedAt: '2026-01-02T12:00:00Z' },
     ];
 
-    const result = await filterUnseenVideos(videos);
+    const result = await filterUnseenVideos(videos, cutoffDate);
     const ids = result.map(v => v.id);
     expect(ids).not.toContain('edge');
     expect(ids).toContain('new1');
+  });
+
+  it('does not apply a date cutoff when none is configured', async () => {
+    const videos = [
+      { id: 'legacy1', publishedAt: '2024-01-01T00:00:00Z' },
+      { id: 'legacy2', publishedAt: '2025-06-01T00:00:00Z' }
+    ];
+
+    const result = await filterUnseenVideos(videos, null);
+    const ids = result.map(v => v.id);
+
+    expect(ids).toContain('legacy1');
+    expect(ids).toContain('legacy2');
   });
 });
