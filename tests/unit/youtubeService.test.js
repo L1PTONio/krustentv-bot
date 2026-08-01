@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
 import { createSafeYouTubeService, ExternalServiceError } from '../../src/services/youtubeService.js';
 
 describe('TD-007 youtube service safety', () => {

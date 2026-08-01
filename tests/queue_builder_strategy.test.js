@@ -33,4 +33,29 @@ describe('queue_builder strategies', () => {
     expect(res.totalMinutes).toBeGreaterThanOrEqual(10);
     expect(res.totalMinutes).toBeLessThanOrEqual(30);
   });
+
+  it('published strategy prioritizes newest releases', async () => {
+    const categoryMap = {
+      memes: {
+        weight: 1,
+        videos: [
+          makeVideo('m-old', 5, '2026-01-01T00:00:00Z'),
+          makeVideo('m-new', 5, '2026-04-01T00:00:00Z')
+        ]
+      },
+      food: {
+        weight: 1,
+        videos: [
+          makeVideo('f-mid', 5, '2026-03-01T00:00:00Z')
+        ]
+      }
+    };
+
+    const res = await buildWeightedQueue(categoryMap, 20, 10, { strategy: 'published' });
+    const ids = res.queue.map(v => v.id);
+
+    expect(ids[0]).toBe('m-new');
+    expect(ids[1]).toBe('f-mid');
+    expect(ids[2]).toBe('m-old');
+  });
 });

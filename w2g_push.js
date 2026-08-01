@@ -220,6 +220,11 @@ export function createW2GService(config = {}) {
       const response = await fetchImpl(endpoint, { method: 'GET', headers: { Accept: 'application/json' } });
       const text = await response.text();
       if (!response.ok) {
+        if (response.status === 404) {
+          // Some rooms do not expose a playlist resource until items exist.
+          return { success: true, items: [], notFound: true };
+        }
+
         let errMsg = `W2G GET Fehler: ${response.status} ${response.statusText}`;
         try {
           const errorData = JSON.parse(text);

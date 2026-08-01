@@ -20,6 +20,7 @@ import { createAuthorizationService } from './src/services/authorizationService.
 import { buildMemberContext } from './src/discord/memberContext.js';
 import { createFlowSessionStore } from './src/services/flowSessionStore.js';
 import { createRuntimeSettingsStore } from './src/services/runtimeSettingsStore.js';
+import { filterVideosByMinDuration } from './src/utils/videoFilters.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
@@ -27,6 +28,7 @@ const client = new Client({
 const require = createRequire(import.meta.url);
 const packageJson = require('./package.json');
 const APP_VERSION = packageJson?.version || '0.0.0';
+const MIN_QUEUE_VIDEO_SECONDS = 181;
 
 // ==================== CONFIGURATION ====================
 let config = null;
@@ -81,14 +83,17 @@ function parseAdminMinPublishedAtInput(value) {
     return parsed;
   }
 
-  // Accept raw ISO values as-is.
-  const direct = new Date(raw);
-  if (!Number.isNaN(direct.getTime())) {
-    return direct;
+  // Accept strict ISO datetime strings only (avoid locale-dependent Date parsing).
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const direct = new Date(raw);
+    if (!Number.isNaN(direct.getTime())) {
+      return direct;
+    }
   }
 
-  // Accept German-friendly format: DD.MM.YYYY or DD.MM.YYYY HH:mm.
-  const deMatch = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?$/);
+  // Accept German-friendly format with dot, slash, dash or spaces:
+  // DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY, DD MM YYYY (+ optional HH:mm).
+  const deMatch = raw.match(/^(\d{1,2})[.\/-\s](\d{1,2})[.\/-\s](\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?$/);
   if (deMatch) {
     const day = Number.parseInt(deMatch[1], 10);
     const month = Number.parseInt(deMatch[2], 10);
@@ -413,93 +418,84 @@ function truncateTitle(value, maxLength = 90) {
   return `${title.slice(0, maxLength - 3)}...`;
 }
 
-function buildDiscoverySections(discoveryData) {
-  const sections = [];
+function buildDiscoveryEmbeds(discoveryData) {
+  const MAX_DESCRIPTION_CHARS = 4000;
+  const categoryEntries = Object.entries(discoveryData);
+  const totalVideos = Object.values(discoveryData).reduce((sum, cat) => sum + (cat.videos?.length || 0), 0);
+  const totalFilteredShorts = Object.values(discoveryData).reduce((sum, cat) => sum + (cat.filteredShorts || 0), 0);
+  const totalCategories = Object.keys(discoveryData).length;
 
-  for (const [catName, catData] of Object.entries(discoveryData)) {
+  let description = '';
+  let displayedVideos = 0;
+  let truncated = false;
+
+  const appendSegment = (segment, prefix = '') => {
+    const candidate = `${description}${prefix}${segment}`;
+    if (candidate.length > MAX_DESCRIPTION_CHARS) {
+      return false;
+    }
+    description = candidate;
+    return true;
+  };
+
+  outer: for (const [catName, catData] of categoryEntries) {
     const videos = Array.isArray(catData?.videos) ? catData.videos : [];
     const header = `**${catName}** (${videos.length} Videos)`;
 
     if (videos.length === 0) {
       const lastPushedAt = formatPublishedAt(catData?.lastPushedAt);
-      if (lastPushedAt === 'Unbekannt') {
-        sections.push(`${header}\n*(keine verfügbaren Videos - bisher kein Push für diese Kategorie)*`);
-      } else {
-        sections.push(`${header}\n*(keine verfügbaren Videos seit dem letzten Push am ${lastPushedAt})*`);
+      const noVideoText = lastPushedAt === 'Unbekannt'
+        ? `${header}\n*(keine verfügbaren Videos - bisher kein Push für diese Kategorie)*`
+        : `${header}\n*(keine verfügbaren Videos seit dem letzten Push am ${lastPushedAt})*`;
+
+      if (!appendSegment(noVideoText, description ? '\n\n' : '')) {
+        truncated = true;
+        break;
       }
       continue;
     }
 
-    const lines = videos.map((video, index) => {
+    if (!appendSegment(header, description ? '\n\n' : '')) {
+      truncated = true;
+      break;
+    }
+
+    for (let index = 0; index < videos.length; index += 1) {
+      const video = videos[index];
       const title = truncateTitle(video.title);
       const publishedAt = formatPublishedAt(video.publishedAt);
-      return `${index + 1}. ${title} (${formatVideoLength(video.duration)})\n   Veröffentlicht: ${publishedAt}`;
-    });
+      const channelName = (video.channelTitle || video.channelId || 'Unbekannter Kanal').trim();
+      const line = `${index + 1}. ${title} (${formatVideoLength(video.duration)})\n   Veröffentlicht: ${publishedAt}\n   Kanal: ${channelName}`;
 
-    let block = `${header}\n`;
-    let part = 1;
-
-    for (const line of lines) {
-      if ((block + line + '\n').length > 1800) {
-        sections.push(part === 1 ? block.trimEnd() : `${header} - Teil ${part}\n${block.split('\n').slice(1).join('\n').trimEnd()}`);
-        block = `${header}\n`;
-        part += 1;
+      if (!appendSegment(line, '\n')) {
+        truncated = true;
+        break outer;
       }
-      block += `${line}\n`;
-    }
 
-    if (block.trim()) {
-      sections.push(part === 1 ? block.trimEnd() : `${header} - Teil ${part}\n${block.split('\n').slice(1).join('\n').trimEnd()}`);
+      displayedVideos += 1;
     }
   }
 
-  return sections;
-}
-
-function buildDiscoveryEmbeds(discoveryData) {
-  const sections = buildDiscoverySections(discoveryData);
-  const embeds = [];
-  const maxEmbeds = 10;
-  let currentText = '';
-
-  for (const section of sections) {
-    const candidate = currentText ? `${currentText}\n\n${section}` : section;
-    if (candidate.length > 3800) {
-      embeds.push(currentText);
-      currentText = section;
-      if (embeds.length >= maxEmbeds) {
-        break;
-      }
-    } else {
-      currentText = candidate;
+  const omittedVideos = Math.max(0, totalVideos - displayedVideos);
+  if (truncated && omittedVideos > 0) {
+    const hint = `\n\n... und ${omittedVideos} Videos mehr (Discord-Limit).`;
+    if ((description + hint).length <= MAX_DESCRIPTION_CHARS) {
+      description += hint;
+    } else if (hint.length < MAX_DESCRIPTION_CHARS) {
+      const keep = Math.max(0, MAX_DESCRIPTION_CHARS - hint.length - 3);
+      description = `${description.slice(0, keep)}...${hint}`;
     }
   }
 
-  if (currentText && embeds.length < maxEmbeds) {
-    embeds.push(currentText);
-  }
-
-  const totalVideos = Object.values(discoveryData).reduce((sum, cat) => sum + (cat.videos?.length || 0), 0);
-  const totalCategories = Object.keys(discoveryData).length;
-
-  const result = embeds.map((text, index) => new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle('🔎 DISCOVERY - Verfügbare Videos')
-    .setDescription(text)
+    .setDescription(description || 'Keine Discovery-Daten verfügbar.')
     .setColor(0x5865F2)
     .setFooter({
-      text: `Kategorien: ${totalCategories} • Videos: ${totalVideos} • Seite ${index + 1}/${embeds.length}`
-    }));
-
-  const truncated = sections.length > 0 && embeds.length === maxEmbeds && sections.join('\n\n').length > embeds.join('').length;
-  if (truncated && result.length > 0) {
-    result[result.length - 1].addFields({
-      name: '⚠️ Hinweis',
-      value: 'Nicht alle Einträge konnten in einer Nachricht angezeigt werden (Discord-Limit).',
-      inline: false
+      text: `Kategorien: ${totalCategories} • Videos: ${displayedVideos}/${totalVideos} • Shorts gefiltert: ${totalFilteredShorts}`
     });
-  }
 
-  return result;
+  return [embed];
 }
 
 async function collectDiscoveryData() {
@@ -538,9 +534,12 @@ async function collectDiscoveryData() {
       }
     }));
 
+    const { videos: filteredVideos, removedCount } = filterVideosByMinDuration(enrichedVideos, MIN_QUEUE_VIDEO_SECONDS, { excludeLikelyShorts: true });
+
     discoveryData[catName] = {
-      videos: enrichedVideos,
-      lastPushedAt: await history.getLastPushedAtForCategory(catName)
+      videos: filteredVideos,
+      lastPushedAt: await history.getLastPushedAtForCategory(catName),
+      filteredShorts: removedCount
     };
   });
 
@@ -615,6 +614,7 @@ async function startTVFlow(interaction) {
     const categoryVideos = {};
     let totalVideos = 0;
     let totalMinutes = 0;
+    let totalFilteredShorts = 0;
 
     // Paralleles Laden aller Kategorien (schneller)
     const categoryPromises = Object.entries(allCategories).map(async ([catName, catData]) => {
@@ -649,18 +649,27 @@ async function startTVFlow(interaction) {
             duration: details?.duration || 0
           });
         }
+
+        const { videos: filteredVideos, removedCount } = filterVideosByMinDuration(videosWithDuration, MIN_QUEUE_VIDEO_SECONDS, { excludeLikelyShorts: true });
+        totalFilteredShorts += removedCount;
+
+        if (filteredVideos.length === 0) {
+          console.log(`    ⚠️ "${catName}": Nur Shorts/Kurzvideos gefunden, übersprungen (${removedCount})`);
+          return null;
+        }
         
         // Berechne Gesamtdauer in Minuten
-        const totalSeconds = videosWithDuration.reduce((sum, v) => sum + (v.duration || 0), 0);
+        const totalSeconds = filteredVideos.reduce((sum, v) => sum + (v.duration || 0), 0);
         const totalMinutes = Math.round(totalSeconds / 60);
         
-        console.log(`    ✅ "${catName}": ${videos.length} Videos, ${totalMinutes} Min`);
+        console.log(`    ✅ "${catName}": ${filteredVideos.length} Videos, ${totalMinutes} Min (Shorts/Kurzvideos gefiltert: ${removedCount})`);
         return {
           catName,
           data: {
-            videos: videosWithDuration,
-            count: videos.length,
-            minutes: totalMinutes
+            videos: filteredVideos,
+            count: filteredVideos.length,
+            minutes: totalMinutes,
+            filteredShorts: removedCount
           }
         };
       }
@@ -710,6 +719,9 @@ async function startTVFlow(interaction) {
     }
     
     overviewText += `\n**Gesamt** • ${totalVideos} Videos • ${totalMinutes} Min`;
+    if (totalFilteredShorts > 0) {
+      overviewText += `\n**Hinweis** • ${totalFilteredShorts} Shorts/Kurzvideos (< ${MIN_QUEUE_VIDEO_SECONDS}s oder als Shorts markiert) wurden ausgefiltert`;
+    }
 
     const embed = new EmbedBuilder()
       .setDescription(overviewText)
@@ -835,24 +847,26 @@ async function showHelp(interaction) {
           '**`/krustentv help`**\n' +
           '└ Zeigt diese Hilfeseite (alle Commands & Funktionen)\n\n' +
           '**`/krustentv ping`**\n' +
-          '└ Verbindungstest - zeigt Bot-Latenz in Millisekunden',
+          '└ Verbindungstest (Pong)\n\n' +
+          '**`/krustentv version`**\n' +
+          '└ Zeigt die aktuell laufende Bot-Version',
         inline: false
       },
       {
         name: '🎬 TV START - Videos zu Watch2Gether pushen',
         value: 
           '**Schritt 1:** Videos sammeln\n' +
-          '└ Lädt alle neuen Videos aus allen Kategorien\n\n' +
+          '└ Lädt alle verfügbaren Videos aus den ausgewählten Kategorien\n\n' +
           '**Schritt 2:** Watchtime auswählen\n' +
           '└ 30 Min, 60 Min, 90 Min oder benutzerdefiniert\n\n' +
           '**Schritt 3:** Kategorien auswählen\n' +
           '└ Wähle, welche Kategorien in die Queue sollen\n\n' +
-          '**Schritt 4:** Queue erstellen\n' +
-          '└ Videos werden gewichtet & gemischt\n\n' +
-          '**Schritt 5:** Zu W2G pushen\n' +
-          '└ Videos werden zu Watch2Gether hochgeladen\n' +
-          '└ Playlist-Link wird angezeigt\n' +
-          '└ Videos werden als "gesehen" markiert',
+          '**Schritt 4:** Reihenfolge wählen\n' +
+          '└ Shuffle, Kategorie Blocks, Neueste zuerst oder Älteste zuerst\n\n' +
+          '**Schritt 5:** Queue-Vorschau prüfen\n' +
+          '└ Mit Veröffentlichungsdatum, Dauer, Kanal und Kategorie\n\n' +
+          '**Schritt 6:** Zu W2G pushen\n' +
+          '└ Videos werden in Watch2Gether gepusht und als gesehen gespeichert',
         inline: false
       },
       {
@@ -869,7 +883,7 @@ async function showHelp(interaction) {
           '├ Entfernen: Channel aus Kategorie löschen\n' +
           '└ Verschieben: Channel in andere Kategorie verschieben\n\n' +
           '**🕘 Push-History**\n' +
-          '└ Zeigt die zuletzt zu W2G gepushten Videos\n' +
+          '└ Zeigt die zuletzt zu W2G gepushten Videos (max. 100)\n' +
           '└ Mit Veröffentlichungs- und Push-Zeitpunkt\n\n' +
           '**📅 Min Video-Datum**\n' +
           '└ Setzt MIN_VIDEO_PUBLISHED_AT direkt im Admin-Menü\n' +
@@ -886,15 +900,18 @@ async function showHelp(interaction) {
         name: '⚙️ System & Technisches',
         value: 
           '**Video-Filter:**\n' +
-          '└ Nur Videos ≥ 60 Sekunden werden verwendet\n' +
-          '└ Bereits gepushte Videos werden übersprungen\n\n' +
+          `└ Nur Videos ab ${MIN_QUEUE_VIDEO_SECONDS} Sekunden werden verwendet\n` +
+          '└ Shorts/Kurzvideos und bereits gepushte Videos werden übersprungen\n\n' +
           '**Queue-Strategien:**\n' +
           '└ Shuffle: Zufällige Mischung nach Gewichtung\n' +
           '└ Category Blocks: Blockweise nach Kategorien\n' +
-          '└ Manual Order: Manuelle Reihenfolge\n\n' +
+          '└ Veröffentlichung: Neueste zuerst\n' +
+          '└ Veröffentlichung: Älteste zuerst\n\n' +
+          '**Discovery:**\n' +
+          '└ Zeigt pro Kategorie nur aktuell verfügbare (ungesehene) Videos\n\n' +
           '**Caching:**\n' +
           '└ Videos werden als "gesehen" gespeichert\n' +
-          '└ Cache ist 7 Tage gültig',
+          '└ Bleiben gesehen, bis die Watch-History manuell gelöscht wird',
         inline: false
       },
       {
@@ -1021,6 +1038,33 @@ async function handleTVButton(interaction, params, userId) {
   const session = await getSession(userId);
   const target = params[0];
   console.log(`    🎬 TV Button: ${target}, Session Step: ${session.step}`);
+
+  if (target === 'main_confirm') {
+    const fromStep = params[1] || session.step || 'categories';
+    await showTVMainMenuDiscardConfirmation(interaction, userId, fromStep);
+    return;
+  }
+
+  if (target === 'main_discard') {
+    console.log('    🗑️ Queue-Building verworfen, zurück ins Hauptmenü');
+    await clearSession(userId);
+    await showMainMenu(interaction);
+    return;
+  }
+
+  if (target === 'main_stay') {
+    const fromStep = params[1] || 'categories';
+    if (fromStep === 'strategy') {
+      await showStrategySelection(interaction, session, userId);
+      return;
+    }
+    if (fromStep === 'confirm') {
+      await showQueuePreview(interaction, session, userId);
+      return;
+    }
+    await showCategorySelection(interaction, session, userId);
+    return;
+  }
 
   if (target === 'watchtime') {
     const actionKey = `tv:watchtime:${params[1] || 'unknown'}:${userId}`;
@@ -1262,7 +1306,7 @@ async function showAdminMinPublishedAtModal(interaction, userId) {
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
         .setCustomId('min_video_published_at')
-        .setLabel('Datum (z.B. 01.08.2026 oder 01.08.2026 14:30)')
+        .setLabel('Datum (z.B. 31 12 2026 oder 31 12 2026 14:30)')
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
         .setPlaceholder('leer/deaktiviert = aus')
@@ -1527,6 +1571,16 @@ async function showStrategySelection(interaction, session, userId) {
         name: '📦 Kategorie Blocks',
         value: 'Videos werden blockweise nach Kategorien sortiert.\nErst alle Videos einer Kategorie, dann die nächste.',
         inline: false
+      },
+      {
+        name: '🗓️ Veröffentlichung (Neueste zuerst)',
+        value: 'Neueste Videos zuerst (absteigend nach Veröffentlichungsdatum).',
+        inline: false
+      },
+      {
+        name: '📜 Veröffentlichung (Älteste zuerst)',
+        value: 'Älteste Videos zuerst (aufsteigend nach Veröffentlichungsdatum).',
+        inline: false
       }
     );
 
@@ -1538,6 +1592,14 @@ async function showStrategySelection(interaction, session, userId) {
     new ButtonBuilder()
       .setCustomId(`tv:strategy:category_blocks:${userId}`)
       .setLabel('📦 Kategorie Blocks')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`tv:strategy:published_newest:${userId}`)
+      .setLabel('🗓️ Neueste zuerst')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`tv:strategy:published_oldest:${userId}`)
+      .setLabel('📜 Älteste zuerst')
       .setStyle(ButtonStyle.Primary)
   );
 
@@ -1545,6 +1607,10 @@ async function showStrategySelection(interaction, session, userId) {
     new ButtonBuilder()
       .setCustomId(`tv:strategy_back:${userId}`)
       .setLabel('⬅️ Zurück')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`tv:main_confirm:strategy:${userId}`)
+      .setLabel('⬅️ Hauptmenü')
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -1558,12 +1624,23 @@ async function showQueuePreview(interaction, session, userId) {
     const categoryVideos = session.categoryVideos || {};
     const selectedCats = session.selectedCategories || [];
     const watchtime = session.watchtime;
+    const allCats = await categories.getCategories();
+
+    const channelNamesById = {};
+    for (const catName of selectedCats) {
+      const channels = allCats[catName]?.channels || {};
+      for (const [channelId, channelData] of Object.entries(channels)) {
+        const channelName = typeof channelData?.name === 'string' ? channelData.name.trim() : '';
+        if (channelName) {
+          channelNamesById[channelId] = channelName;
+        }
+      }
+    }
 
     // Build queue preview (same logic as actual build)
     const categoryMap = {};
     for (const catName of selectedCats) {
       if (categoryVideos[catName]) {
-        const allCats = await categories.getCategories();
         // Tag videos with category name
         const taggedVideos = categoryVideos[catName].videos.map(v => ({ ...v, category: catName }));
         categoryMap[catName] = {
@@ -1573,7 +1650,7 @@ async function showQueuePreview(interaction, session, userId) {
       }
     }
 
-    const queueResult = await buildWeightedQueue(categoryMap, watchtime, 15, { strategy: session.strategy || 'shuffle' });
+    const queueResult = await buildWeightedQueue(categoryMap, watchtime, 5, { strategy: session.strategy || 'shuffle' });
     
     if (queueResult.queue.length === 0) {
       await interaction.editReply({ 
@@ -1583,6 +1660,10 @@ async function showQueuePreview(interaction, session, userId) {
             new ButtonBuilder()
               .setCustomId(`tv:confirm_back:${userId}`)
               .setLabel('⬅️ Zurück')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId(`tv:main_confirm:confirm:${userId}`)
+              .setLabel('⬅️ Hauptmenü')
               .setStyle(ButtonStyle.Secondary)
           )
         ]
@@ -1594,7 +1675,14 @@ async function showQueuePreview(interaction, session, userId) {
     session.queueResult = queueResult;
 
     // Show preview embed
-    const strategyLabel = session.strategy === 'category_blocks' ? '📦 Kategorie Blocks' : '🔀 Shuffle';
+    let strategyLabel = '🔀 Shuffle';
+    if (session.strategy === 'category_blocks') {
+      strategyLabel = '📦 Kategorie Blocks';
+    } else if (session.strategy === 'published' || session.strategy === 'published_newest') {
+      strategyLabel = '🗓️ Neueste zuerst';
+    } else if (session.strategy === 'published_oldest') {
+      strategyLabel = '📜 Älteste zuerst';
+    }
     const embed = new EmbedBuilder()
       .setTitle('🎬 QUEUE VORSCHAU')
       .setDescription(`Bereit zum Pushen zu Watch2Gether\n**Strategie:** ${strategyLabel}`)
@@ -1605,17 +1693,45 @@ async function showQueuePreview(interaction, session, userId) {
         { name: '🎯 Ziel', value: `${queueResult.targetMinutes} Min`, inline: true }
       );
 
-    // Add video list (max 10)
-    const videoList = queueResult.queue.slice(0, 10).map((v, i) => {
+    // Add video list with strict Discord field-size budget (1024 chars).
+    const previewVideos = queueResult.queue.slice(0, 10);
+    const videoLines = [];
+    let currentLength = 0;
+
+    for (let i = 0; i < previewVideos.length; i += 1) {
+      const v = previewVideos[i];
       const mins = Math.round(v.duration / 60);
-      return `${i + 1}. ${v.title} (${mins} Min)`;
-    }).join('\n');
-    
-    const moreVideos = queueResult.queue.length > 10 ? `\n... und ${queueResult.queue.length - 10} weitere` : '';
+      const publishedAt = formatPublishedAt(v.publishedAt);
+      const rawChannelTitle = (v.channelTitle || '').trim();
+      const channelId = (v.channelId || '').trim();
+      const categoryName = (v.category || 'Unbekannt').trim();
+      const channelTitleLooksLikeId = /^UC[a-zA-Z0-9_-]{22}$/.test(rawChannelTitle);
+      const channelName = (!rawChannelTitle || channelTitleLooksLikeId)
+        ? (channelNamesById[channelId] || 'Unbekannter Kanal')
+        : rawChannelTitle;
+      const line = `${i + 1}. ${v.title}\n   Veröffentlicht: ${publishedAt}\n   Dauer: ${mins} Min\n   Kanal: ${channelName}\n   Kategorie: ${categoryName}`;
+
+      const addedLength = (videoLines.length > 0 ? 1 : 0) + line.length;
+      if (currentLength + addedLength > 1024) {
+        break;
+      }
+
+      videoLines.push(line);
+      currentLength += addedLength;
+    }
+
+    let videoList = videoLines.join('\n');
+    const omittedCount = Math.max(0, queueResult.queue.length - videoLines.length);
+    if (omittedCount > 0) {
+      const hint = `${videoList ? '\n' : ''}... und ${omittedCount} weitere`;
+      if (videoList.length + hint.length <= 1024) {
+        videoList += hint;
+      }
+    }
     
     embed.addFields({
       name: '📋 Videos in der Queue',
-      value: videoList + moreVideos,
+      value: videoList || 'Keine Videos in der Vorschau verfügbar.',
       inline: false
     });
 
@@ -1644,6 +1760,10 @@ async function showQueuePreview(interaction, session, userId) {
       new ButtonBuilder()
         .setCustomId(`tv:confirm_back:${userId}`)
         .setLabel('⬅️ Strategie ändern')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`tv:main_confirm:confirm:${userId}`)
+        .setLabel('⬅️ Hauptmenü')
         .setStyle(ButtonStyle.Secondary)
     );
 
@@ -1661,6 +1781,10 @@ async function showQueuePreview(interaction, session, userId) {
           new ButtonBuilder()
             .setCustomId(`tv:confirm_back:${userId}`)
             .setLabel('⬅️ Zurück')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId(`tv:main_confirm:confirm:${userId}`)
+            .setLabel('⬅️ Hauptmenü')
             .setStyle(ButtonStyle.Secondary)
         )
       ]
@@ -1719,11 +1843,44 @@ async function showCategorySelection(interaction, session, userId) {
     new ButtonBuilder()
       .setCustomId(`tv:category_back:${userId}`)
       .setLabel('◀️ Zurück')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`tv:main_confirm:categories:${userId}`)
+      .setLabel('⬅️ Hauptmenü')
       .setStyle(ButtonStyle.Secondary)
   );
 
   rows.push(controlRow);
   await interaction.editReply({ embeds: [embed], components: rows });
+}
+
+async function showTVMainMenuDiscardConfirmation(interaction, userId, fromStep) {
+  const stepLabel = fromStep === 'strategy'
+    ? 'Strategie-Auswahl'
+    : fromStep === 'confirm'
+      ? 'Queue-Vorschau'
+      : 'Kategorie-Auswahl';
+
+  const embed = new EmbedBuilder()
+    .setTitle('⚠️ Queue-Building verwerfen?')
+    .setDescription(
+      `Du bist gerade in **${stepLabel}**.\n\n` +
+      'Möchtest du wirklich zurück zum Hauptmenü und das aktuelle Queue-Building verwerfen?'
+    )
+    .setColor(0xED4245);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`tv:main_stay:${fromStep}:${userId}`)
+      .setLabel('↩️ Nein, weiterbauen')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`tv:main_discard:${fromStep}:${userId}`)
+      .setLabel('⬅️ Ja, Hauptmenü')
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await interaction.editReply({ embeds: [embed], components: [row] });
 }
 
 async function buildAndPushQueue(interaction, session, userId) {
@@ -2738,7 +2895,7 @@ async function handleModalSubmit(interaction, action, params) {
     const parsed = parseAdminMinPublishedAtInput(rawInput);
     if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
       await interaction.editReply({
-        content: '❌ Ungültiges Datum. Erlaubt: 01.08.2026, 01.08.2026 14:30, 2026-08-01 oder ISO.',
+        content: '❌ Ungültiges Datum. Erlaubt: 31 12 2026, 31.12.2026, 31/12/2026, 31-12-2026, optional mit HH:mm, oder ISO.',
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()

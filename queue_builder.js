@@ -4,7 +4,7 @@ import { buildQueue as buildPureQueue, buildWeightedQueue as buildPureWeightedQu
  * Baut eine Queue basierend auf Watchtime und Toleranz.
  * Die alte Signatur bleibt für bestehende Aufrufer erhalten.
  */
-export async function buildQueue(videos, targetMinutes, toleranceMinutes = 15, options = {}) {
+export async function buildQueue(videos, targetMinutes, toleranceMinutes = 5, options = {}) {
   if (videos && typeof videos === 'object' && !Array.isArray(videos)) {
     return buildWeightedQueue(videos, targetMinutes, toleranceMinutes, options);
   }
@@ -48,7 +48,7 @@ export function calculateTotalWatchtime(videos) {
 /**
  * Builds a weighted queue from a map of categories.
  */
-export async function buildWeightedQueue(categoryMap, targetMinutes, toleranceMinutes = 15, options = {}) {
+export async function buildWeightedQueue(categoryMap, targetMinutes, toleranceMinutes = 5, options = {}) {
   const result = buildPureWeightedQueue(
     Object.fromEntries(Object.entries(categoryMap || {}).map(([name, data]) => [name, data])),
     {

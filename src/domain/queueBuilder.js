@@ -15,6 +15,7 @@ function normalizeCandidate(candidate, index) {
 
   return {
     id,
+    sourceId: candidate?.sourceId || null,
     title: candidate?.title || id,
     durationSeconds,
     publishedAt: candidate?.publishedAt || null,
@@ -44,6 +45,13 @@ function shuffleArray(items, random) {
   return result;
 }
 
+function getPublishedAtTimestamp(value) {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return Number.NEGATIVE_INFINITY;
+  return date.getTime();
+}
+
 function buildQueue(candidates, options = {}) {
   const targetSeconds = Number(options.targetSeconds ?? 0);
   const toleranceSeconds = Number(options.toleranceSeconds ?? 0);
@@ -59,7 +67,7 @@ function buildQueue(candidates, options = {}) {
     throw new Error('toleranceSeconds must be a non-negative integer');
   }
 
-  if (!['shuffle', 'category_blocks'].includes(strategy)) {
+  if (!['shuffle', 'category_blocks', 'published', 'published_newest', 'published_oldest'].includes(strategy)) {
     throw new Error('Unsupported strategy');
   }
 
@@ -82,7 +90,22 @@ function buildQueue(candidates, options = {}) {
   }
 
   const random = createSeededRandom(seed);
-  const orderedCandidates = strategy === 'shuffle' ? shuffleArray(normalizedCandidates, random) : normalizedCandidates;
+  let orderedCandidates = normalizedCandidates;
+  if (strategy === 'shuffle') {
+    orderedCandidates = shuffleArray(normalizedCandidates, random);
+  } else if (strategy === 'published' || strategy === 'published_newest') {
+    orderedCandidates = [...normalizedCandidates].sort((a, b) => {
+      const delta = getPublishedAtTimestamp(b.publishedAt) - getPublishedAtTimestamp(a.publishedAt);
+      if (delta !== 0) return delta;
+      return a.id.localeCompare(b.id);
+    });
+  } else if (strategy === 'published_oldest') {
+    orderedCandidates = [...normalizedCandidates].sort((a, b) => {
+      const delta = getPublishedAtTimestamp(a.publishedAt) - getPublishedAtTimestamp(b.publishedAt);
+      if (delta !== 0) return delta;
+      return a.id.localeCompare(b.id);
+    });
+  }
   const queue = [];
   let totalSeconds = 0;
 
@@ -163,26 +186,76 @@ function buildWeightedQueue(categoryMap, options = {}) {
     };
   });
 
+  const resolvedStrategy = options.strategy || 'category_blocks';
   const candidates = [];
+  const weightedSchedule = [];
+  const queues = new Map();
+
   for (const entry of entries) {
     const videos = entry.videos.length > 0
-      ? entry.videos
-      : [{ id: `${entry.category}-default`, title: entry.category, durationSeconds: 60, category: entry.category }];
-
-    for (let index = 0; index < entry.weight; index += 1) {
-      const video = videos[index % videos.length];
-      candidates.push({
+      ? entry.videos.map((video, index) => ({
         ...video,
-        id: `${video.id}-${index}`,
+        sourceId: video.id,
+        id: `${video.id}-${entry.category}-${index}`,
         category: entry.category
-      });
+      }))
+      : Array.from({ length: entry.weight }, (_, index) => ({
+        id: `${entry.category}-default-${index}`,
+        title: entry.category,
+        durationSeconds: 60,
+        category: entry.category,
+        publishedAt: null,
+        channelId: null
+      }));
+
+    queues.set(entry.category, videos);
+    for (let i = 0; i < entry.weight; i += 1) {
+      weightedSchedule.push(entry.category);
     }
   }
 
-  return buildQueue(candidates, {
+  if (resolvedStrategy === 'category_blocks') {
+    for (const entry of entries) {
+      const queue = queues.get(entry.category) || [];
+      for (const video of queue) {
+        candidates.push(video);
+      }
+    }
+  } else {
+    let hasRemaining = Array.from(queues.values()).some(queue => queue.length > 0);
+    while (hasRemaining) {
+      let pickedInRound = false;
+
+      for (const categoryName of weightedSchedule) {
+        const queue = queues.get(categoryName);
+        if (!queue || queue.length === 0) {
+          continue;
+        }
+
+        candidates.push(queue.shift());
+        pickedInRound = true;
+      }
+
+      if (!pickedInRound) {
+        break;
+      }
+
+      hasRemaining = Array.from(queues.values()).some(queue => queue.length > 0);
+    }
+  }
+
+  const built = buildQueue(candidates, {
     ...options,
-    strategy: options.strategy || 'category_blocks'
+    strategy: resolvedStrategy
   });
+
+  return {
+    ...built,
+    queue: built.queue.map(video => ({
+      ...video,
+      id: video.sourceId || video.id
+    }))
+  };
 }
 
 function calculateTotalWatchtime(videos) {

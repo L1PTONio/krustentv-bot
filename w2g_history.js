@@ -221,10 +221,25 @@ export async function filterUnseenVideos(videos, minPublishedAt = null) {
   const cutoffDate = minPublishedAt instanceof Date && !Number.isNaN(minPublishedAt.getTime())
     ? minPublishedAt
     : null;
+  const seenIds = new Set(Object.keys(history.seen || {}));
   
   return videos.filter(video => {
+    const videoId = typeof video?.id === 'string' ? video.id : '';
+
     // Muss ungesehen sein
-    if (history.seen[video.id]?.seen === true) return false;
+    if (!videoId) return false;
+    if (history.seen[videoId]?.seen === true) return false;
+
+    // Backward compatibility: older queue builds stored seen IDs with a suffix
+    // like "<youtubeId>-<category>-<index>". Treat those as seen as well.
+    let hasLegacySeenMatch = false;
+    for (const seenId of seenIds) {
+      if (seenId.startsWith(`${videoId}-`)) {
+        hasLegacySeenMatch = true;
+        break;
+      }
+    }
+    if (hasLegacySeenMatch) return false;
     
     // Muss ab 01.01.2026 sein
     if (cutoffDate && video.publishedAt) {
