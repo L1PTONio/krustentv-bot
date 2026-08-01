@@ -1,5 +1,89 @@
 # KrüstchenTV Bot
 
+## English
+
+A stable, currently beta-focused Discord bot that collects new YouTube videos and pushes them to a fixed Watch2Gether room.
+
+> Beta status: Intended for private/friend testing, not a fully hardened production setup.
+
+### 🔧 Features
+- Automatic discovery of new videos by category/channel
+- Interactive TV flow: watchtime, category selection, order strategy, preview, push
+- Watch2Gether bulk push (max 50 items per request)
+- Discovery view for currently available (unseen) videos per category
+- Push history in the admin menu (published and pushed timestamps)
+- Persistence via `categories.json` and `w2g_history.json`
+- Optional time filter via `MIN_VIDEO_PUBLISHED_AT`
+
+### ⚙️ Requirements
+- Node.js 22+
+- Discord Application (bot token, client ID)
+- YouTube Data API key (v3)
+- Watch2Gether API key + room ID (streamkey)
+
+### 🔐 Configuration (.env)
+
+Use the same `.env` block shown above.
+
+Important:
+- `W2G_API_KEY` must belong to an account that is a member of the target room.
+- `W2G_DRY_RUN=true` skips real Watch2Gether POST calls.
+- `W2G_FORCE_LIVE=true` forces live push even in dry run mode (with valid credentials).
+
+### Installation & Development
+
+```bash
+npm install
+npm run dev   # node --watch index.js
+# or
+npm start
+```
+
+For faster slash-command iteration, set `DISCORD_GUILD_ID`.
+
+### 📥 Slash Commands (`/krustentv`)
+- `/krustentv menu` - open main menu (TV/Admin/Help)
+- `/krustentv ping` - connectivity check
+- `/krustentv help` - help page
+- `/krustentv version` - running bot version
+
+Note:
+- Older direct subcommands like `start`, `overview`, `category_*`, `channel_*` are no longer registered.
+- Those flows are handled through menu/button/modal interactions.
+
+### 🔁 Data Model (Short)
+- `categories.json`: categories and channels
+- `w2g_history.json`: pushed/seen video IDs and push history
+- Seen videos stay filtered until watch history is manually cleared
+
+### ▶️ Playback Modes
+- `Shuffle` (default): random order
+- `Category Blocks`: grouped by category
+- `Published (Newest first)`: descending by publish date
+- `Published (Oldest first)`: ascending by publish date
+
+### 🎯 Filtering
+- Only videos with at least 181 seconds
+- Detected shorts/short-form content is filtered out
+- Already pushed/seen videos are skipped
+
+### 🧪 Testing
+- `npm test`
+- `npm run test:coverage`
+
+### ⚠️ Troubleshooting
+- Every interaction is answered exactly once
+- For W2G `403`: verify room membership and `W2G_ROOM_ID`
+- Missing env values trigger fail-fast startup errors
+
+### 📂 File Structure (Short)
+- `index.js` - Discord setup and routing
+- `youtube.js` - YouTube resolution and API requests
+- `w2g_push.js` - Watch2Gether push/validation
+- `w2g_history.js` - seen/push history
+- `queue_builder.js` - queue logic wrapper
+- `categories.js` - category/channel persistence
+
 ## Deutsch
 
 Ein stabiler, derzeit beta-orientierter Discord-Bot, der neue YouTube-Videos sammelt und per Watch2Gether API in einen festen Raum pusht.
@@ -125,90 +209,6 @@ Hinweis:
 - `w2g_history.js` - Gesehen/Push-History
 - `queue_builder.js` - Queue-Logik Wrapper
 - `categories.js` - Kategorien/Channels Persistenz
-
-## English
-
-A stable, currently beta-focused Discord bot that collects new YouTube videos and pushes them to a fixed Watch2Gether room.
-
-> Beta status: Intended for private/friend testing, not a fully hardened production setup.
-
-### 🔧 Features
-- Automatic discovery of new videos by category/channel
-- Interactive TV flow: watchtime, category selection, order strategy, preview, push
-- Watch2Gether bulk push (max 50 items per request)
-- Discovery view for currently available (unseen) videos per category
-- Push history in the admin menu (published and pushed timestamps)
-- Persistence via `categories.json` and `w2g_history.json`
-- Optional time filter via `MIN_VIDEO_PUBLISHED_AT`
-
-### ⚙️ Requirements
-- Node.js 22+
-- Discord Application (bot token, client ID)
-- YouTube Data API key (v3)
-- Watch2Gether API key + room ID (streamkey)
-
-### 🔐 Configuration (.env)
-
-Use the same `.env` block shown above.
-
-Important:
-- `W2G_API_KEY` must belong to an account that is a member of the target room.
-- `W2G_DRY_RUN=true` skips real Watch2Gether POST calls.
-- `W2G_FORCE_LIVE=true` forces live push even in dry run mode (with valid credentials).
-
-### Installation & Development
-
-```bash
-npm install
-npm run dev   # node --watch index.js
-# or
-npm start
-```
-
-For faster slash-command iteration, set `DISCORD_GUILD_ID`.
-
-### 📥 Slash Commands (`/krustentv`)
-- `/krustentv menu` - open main menu (TV/Admin/Help)
-- `/krustentv ping` - connectivity check
-- `/krustentv help` - help page
-- `/krustentv version` - running bot version
-
-Note:
-- Older direct subcommands like `start`, `overview`, `category_*`, `channel_*` are no longer registered.
-- Those flows are handled through menu/button/modal interactions.
-
-### 🔁 Data Model (Short)
-- `categories.json`: categories and channels
-- `w2g_history.json`: pushed/seen video IDs and push history
-- Seen videos stay filtered until watch history is manually cleared
-
-### ▶️ Playback Modes
-- `Shuffle` (default): random order
-- `Category Blocks`: grouped by category
-- `Published (Newest first)`: descending by publish date
-- `Published (Oldest first)`: ascending by publish date
-
-### 🎯 Filtering
-- Only videos with at least 181 seconds
-- Detected shorts/short-form content is filtered out
-- Already pushed/seen videos are skipped
-
-### 🧪 Testing
-- `npm test`
-- `npm run test:coverage`
-
-### ⚠️ Troubleshooting
-- Every interaction is answered exactly once
-- For W2G `403`: verify room membership and `W2G_ROOM_ID`
-- Missing env values trigger fail-fast startup errors
-
-### 📂 File Structure (Short)
-- `index.js` - Discord setup and routing
-- `youtube.js` - YouTube resolution and API requests
-- `w2g_push.js` - Watch2Gether push/validation
-- `w2g_history.js` - seen/push history
-- `queue_builder.js` - queue logic wrapper
-- `categories.js` - category/channel persistence
 
 ## Contributing
 
