@@ -1,27 +1,27 @@
 # KrüstchenTV Bot
 
-Ein stabiler, aber noch beta-gestützter Discord-Bot, der automatisch neue YouTube‑Videos sammelt und per Watch2Gether API in einen festen Raum pusht.
+## Deutsch
 
-> Beta-Status: Dieser Bot ist aktuell als Beta-Version gedacht und eignet sich für den privaten Freundes-/Testbetrieb, nicht als vollständig abgesicherter Produktivbetrieb.
+Ein stabiler, derzeit beta-orientierter Discord-Bot, der neue YouTube-Videos sammelt und per Watch2Gether API in einen festen Raum pusht.
 
-## 🔧 Features
+> Beta-Status: Für privaten Freundes-/Testbetrieb gedacht, nicht als vollständig abgesicherter Produktivbetrieb.
+
+### 🔧 Features
 - Automatische Suche nach neuen Videos pro Kategorie/Channel
-- Interaktiver TV-Flow (Watchtime, Kategorie-Auswahl, Reihenfolge, Vorschau, Push)
-- Watch2Gether Bulk‑Push (max. 50 Items / Request)
+- Interaktiver TV-Flow: Watchtime, Kategorie-Auswahl, Reihenfolge, Vorschau, Push
+- Watch2Gether Bulk-Push (max. 50 Items pro Request)
 - Discovery-Ansicht mit verfügbaren (ungesehenen) Videos pro Kategorie
-- Push-History im Admin-Menü (mit Veröffentlichungs- und Push-Zeitpunkt)
-- Persistenz: `categories.json` + `w2g_history.json` (verhütet Doppelungen)
-- **Optionaler Zeit-Filter:** `MIN_VIDEO_PUBLISHED_AT` ermöglicht das Ignorieren von Videos, die vor einem konfigurierten Datum veröffentlicht wurden (nützlich, um alte/bereits verarbeitete Videos auszuschließen).
-- Sauberes Fehler‑Handling & UX‑konforme Interaction‑Antworten
+- Push-History im Admin-Menü (Veröffentlichungs- und Push-Zeitpunkt)
+- Persistenz über `categories.json` und `w2g_history.json`
+- Optionaler Zeitfilter via `MIN_VIDEO_PUBLISHED_AT`
 
-## ⚙️ Voraussetzungen
-- Node.js 22+ (ESM, `type: "module"` in `package.json`)
+### ⚙️ Voraussetzungen
+- Node.js 22+
 - Discord Application (Bot Token, Client ID)
 - YouTube Data API Key (v3)
 - Watch2Gether API Key + Room ID (streamkey)
 
-## 🔐 Konfiguration und Environment-Variablen
-Erstelle eine `.env` im Projektroot. Die Werte werden zentral über die Konfigurationslogik geladen und validiert:
+### 🔐 Konfiguration (.env)
 
 ```env
 # Optional: defaults to development when empty or unset
@@ -29,7 +29,7 @@ NODE_ENV=development
 
 DISCORD_TOKEN=bot_token_here
 DISCORD_CLIENT_ID=application_client_id
-# optional für schnelle Entwicklung (registriert nur in dieser Guild)
+# optional for fast dev registration in one guild
 DISCORD_GUILD_ID=guild_id_for_dev
 
 YOUTUBE_API_KEY=your_youtube_api_key
@@ -43,10 +43,9 @@ W2G_REQUEST_TIMEOUT_MS=10000
 W2G_MIN_REQUEST_INTERVAL_MS=1000
 W2G_DEBUG=false
 
-# Optional: empty values fall back to the built-in defaults
+# Optional: empty values fall back to built-in defaults
 DATABASE_PATH=data/krustentv.sqlite
-# Optional: nur Videos berücksichtigen, die an/ab diesem Datum veröffentlicht wurden (ISO 8601)
-# Beispiel: MIN_VIDEO_PUBLISHED_AT=2026-01-01T00:00:00Z
+# Optional: only include videos published on/after this timestamp (ISO 8601)
 MIN_VIDEO_PUBLISHED_AT=2026-01-01T00:00:00Z
 
 ADMIN_USER_IDS=
@@ -55,9 +54,13 @@ ADMIN_ALLOW_ALL_MEMBERS=false
 SESSION_TTL_MINUTES=60
 ```
 
-> WICHTIG: `W2G_API_KEY` muss zu einem Account gehören, der Mitglied des Rooms ist. Wenn `W2G_DRY_RUN=true`, werden echte Watch2Gether-POSTs übersprungen. Mit `W2G_FORCE_LIVE=true` wird Live-Push trotz Dry-Run erzwingt, sofern die nötigen Credentials gesetzt sind.
+Wichtig:
+- `W2G_API_KEY` muss zu einem Account gehören, der Mitglied im Room ist.
+- `W2G_DRY_RUN=true` überspringt echte Watch2Gether-POSTs.
+- `W2G_FORCE_LIVE=true` erzwingt Live-Push trotz Dry-Run (mit gültigen Credentials).
 
-## Installation & Entwicklung
+### Installation & Entwicklung
+
 ```bash
 npm install
 npm run dev   # node --watch index.js
@@ -65,72 +68,152 @@ npm run dev   # node --watch index.js
 npm start
 ```
 
-Für schnelle Slash-Command-Entwicklung: setze `DISCORD_GUILD_ID` → Commands werden direkt in dieser Guild registriert.
+Für schnelle Slash-Command-Entwicklung: `DISCORD_GUILD_ID` setzen.
 
-## 🚀 Hosting auf bot-hosting.net
-Für den Beta-Deploy auf bot-hosting.net sind folgende Punkte wichtig:
+### 🚀 Hosting auf bot-hosting.net
 - Node.js 22+ verwenden
-- `npm install` als Installationsbefehl setzen
-- `npm start` als Startbefehl setzen
-- Eine `.env`-Datei mit den echten Secrets im Host-Setup hinterlegen
-- Für den ersten Beta-Deploy empfiehlt sich `W2G_DRY_RUN=true`, bis der Live-Flow stabil geprüft ist
+- `npm install` als Installationsbefehl
+- `npm start` als Startbefehl
+- `.env` mit echten Secrets im Host-Setup hinterlegen
+- Für den ersten Deploy: `W2G_DRY_RUN=true`
 
-Weitere Details sind in [docs/BOT_HOSTING_NET.md](docs/BOT_HOSTING_NET.md) beschrieben. Für die Beta-Funktionsprüfung und den späteren GitHub-Deploy-Flow steht zusätzlich [docs/BETA_FUNCTIONALITY_CHECKLIST.md](docs/BETA_FUNCTIONALITY_CHECKLIST.md) zur Verfügung. Für den operativen Betrieb der Beta-Phase ergänzt [docs/BETA_OPERATIONS_CHECKLIST.md](docs/BETA_OPERATIONS_CHECKLIST.md) die Checkliste. Für den finalen Abschluss- und Go-Live-Check steht [docs/BETA_RELEASE_CHECKLIST.md](docs/BETA_RELEASE_CHECKLIST.md) bereit.
+Weitere Infos:
+- [docs/BOT_HOSTING_NET.md](docs/BOT_HOSTING_NET.md)
+- [docs/BETA_FUNCTIONALITY_CHECKLIST.md](docs/BETA_FUNCTIONALITY_CHECKLIST.md)
+- [docs/BETA_OPERATIONS_CHECKLIST.md](docs/BETA_OPERATIONS_CHECKLIST.md)
+- [docs/BETA_RELEASE_CHECKLIST.md](docs/BETA_RELEASE_CHECKLIST.md)
 
-## 📥 Verfügbare Slash-Commands (`/krustentv`)
-- `/krustentv menu` — öffnet das aktuelle Hauptmenü mit TV-, Admin- und Hilfe-Aktionen
-- `/krustentv ping` — prüft Bot-Verbindung
-- `/krustentv help` — zeigt die aktuelle Hilfeseite mit Version
-- `/krustentv version` — zeigt die aktuell laufende Bot-Version
+### 📥 Slash Commands (`/krustentv`)
+- `/krustentv menu` - Hauptmenü (TV/Admin/Hilfe)
+- `/krustentv ping` - Verbindungscheck
+- `/krustentv help` - Hilfeseite
+- `/krustentv version` - aktuelle Version
 
-> Hinweis: Die älteren Direkt-Subcommands wie `start`, `overview`, `category_*` und `channel_*` sind im aktuellen Refactor nicht mehr als eigene Slash-Commands registriert; sie werden über das Menü und die Button-/Modal-Interaktionen gesteuert.
+Hinweis:
+- Ältere Direkt-Subcommands wie `start`, `overview`, `category_*`, `channel_*` sind nicht mehr separat registriert.
+- Diese Funktionen laufen über Menü-/Button-/Modal-Interaktionen.
 
-## 🔁 Datenmodell (Kurz)
-- `categories.json` enthält Objekt mit Kategorien → Channels (siehe Datei im Repo)
-- `w2g_history.json` speichert bereits gepushte/gesehene Video‑IDs und Push-History
+### 🔁 Datenmodell (Kurz)
+- `categories.json`: Kategorien und Channels
+- `w2g_history.json`: gepushte/gesehene Video-IDs und Push-History
 - Gesehene Videos bleiben gefiltert, bis die Watch-History manuell gelöscht wird
 
-## ▶️ Playback-Modi (Queue-Mix)
-Nach Auswahl von Watchtime und Kategorien kannst du wählen, wie die Videos abgespielt werden:
-- `Shuffle` (default): Videos werden zufällig gemischt
-- `Category Blocks`: Videos werden blockweise nach Kategorien sortiert
-- `Veröffentlichung (Neueste zuerst)`: Sortierung nach Datum absteigend
-- `Veröffentlichung (Älteste zuerst)`: Sortierung nach Datum aufsteigend
+### ▶️ Playback-Modi
+- `Shuffle` (default): zufällige Reihenfolge
+- `Category Blocks`: nach Kategorien blockweise
+- `Veröffentlichung (Neueste zuerst)`: Datum absteigend
+- `Veröffentlichung (Älteste zuerst)`: Datum aufsteigend
 
-Diese Auswahl beeinflusst nur die Reihenfolge, nicht die Auswahl der Videos (die Queue-Auswahl respektiert weiterhin Gewichtungen und Watchtime).
+### 🎯 Filterlogik
+- Nur Videos ab 181 Sekunden
+- Erkannte Shorts/Kurzvideos werden gefiltert
+- Bereits gepushte/gesehene Videos werden übersprungen
 
-## 🎯 Aktuelle Filterlogik
-- Nur Videos ab 181 Sekunden werden berücksichtigt
-- Als Shorts/Kurzvideos erkannte Inhalte werden gefiltert
-- Bereits gepushte/gesehene Videos werden für Discovery und Queue übersprungen
+### 🧪 Testing
+- `npm test`
+- `npm run test:coverage`
 
-## 🧭 Watch2Gether Hinweise
-- Es existiert genau **ein** Room (Room ID via `W2G_ROOM_ID`)
-- Push erfolgt per Bulk (max. 50 Items / Request) an:
-  `POST https://api.w2g.tv/rooms/{ROOM_ID}/playlists/current/playlist_items/sync_update`
-- Body muss `w2g_api_key` enthalten (nicht als Header)
+### ⚠️ Troubleshooting
+- Jede Interaction wird genau einmal beantwortet
+- Bei `403` von W2G: Room-Mitgliedschaft und `W2G_ROOM_ID` prüfen
+- Fehlende ENV: fail-fast Startup mit klarer Meldung
 
-## 🧪 Testing & Entwicklung
-- Für Integrationstests: setze `DISCORD_GUILD_ID` zum schnellen Command-Iterieren.
-- Testen mit Jest:
-  - `npm test`
-  - `npm run test:coverage`
+### 📂 Dateistruktur (Kurz)
+- `index.js` - Discord Setup und Routing
+- `youtube.js` - YouTube-Auflösung und API Requests
+- `w2g_push.js` - Watch2Gether Push/Validierung
+- `w2g_history.js` - Gesehen/Push-History
+- `queue_builder.js` - Queue-Logik Wrapper
+- `categories.js` - Kategorien/Channels Persistenz
 
-## ⚠️ Best Practices / Troubleshooting
-- Jede Interaction wird exakt einmal beantwortet (deferReply / editReply / followUp via helper).
-- Bei `403` von W2G: prüfe, ob API‑User im Room ist, oder ob `W2G_ROOM_ID` korrekt ist.
-- Fehlende ENV → Startup bricht ab mit klarer Fehlermeldung (fail‑fast).
+## English
 
-## 📂 Dateistruktur (Kurz)
-- `index.js` — Discord Setup, Command Router
-- `youtube.js` — YouTube-Auflösung & API‑Requests
-- `w2g_push.js` — Watch2Gether Push / Validierung
-- `w2g_history.js` — Gesehene Videos & Cache
-- `queue_builder.js` — Queue‑Logik (ALT → NEU)
-- `categories.js` — Kategorien & Channels persistieren
+A stable, currently beta-focused Discord bot that collects new YouTube videos and pushes them to a fixed Watch2Gether room.
 
-## Mitwirken / Contributing
-PRs willkommen — bitte Tests und kurze Beschreibung beifügen.
+> Beta status: Intended for private/friend testing, not a fully hardened production setup.
 
-## Lizenz
+### 🔧 Features
+- Automatic discovery of new videos by category/channel
+- Interactive TV flow: watchtime, category selection, order strategy, preview, push
+- Watch2Gether bulk push (max 50 items per request)
+- Discovery view for currently available (unseen) videos per category
+- Push history in the admin menu (published and pushed timestamps)
+- Persistence via `categories.json` and `w2g_history.json`
+- Optional time filter via `MIN_VIDEO_PUBLISHED_AT`
+
+### ⚙️ Requirements
+- Node.js 22+
+- Discord Application (bot token, client ID)
+- YouTube Data API key (v3)
+- Watch2Gether API key + room ID (streamkey)
+
+### 🔐 Configuration (.env)
+
+Use the same `.env` block shown above.
+
+Important:
+- `W2G_API_KEY` must belong to an account that is a member of the target room.
+- `W2G_DRY_RUN=true` skips real Watch2Gether POST calls.
+- `W2G_FORCE_LIVE=true` forces live push even in dry run mode (with valid credentials).
+
+### Installation & Development
+
+```bash
+npm install
+npm run dev   # node --watch index.js
+# or
+npm start
+```
+
+For faster slash-command iteration, set `DISCORD_GUILD_ID`.
+
+### 📥 Slash Commands (`/krustentv`)
+- `/krustentv menu` - open main menu (TV/Admin/Help)
+- `/krustentv ping` - connectivity check
+- `/krustentv help` - help page
+- `/krustentv version` - running bot version
+
+Note:
+- Older direct subcommands like `start`, `overview`, `category_*`, `channel_*` are no longer registered.
+- Those flows are handled through menu/button/modal interactions.
+
+### 🔁 Data Model (Short)
+- `categories.json`: categories and channels
+- `w2g_history.json`: pushed/seen video IDs and push history
+- Seen videos stay filtered until watch history is manually cleared
+
+### ▶️ Playback Modes
+- `Shuffle` (default): random order
+- `Category Blocks`: grouped by category
+- `Published (Newest first)`: descending by publish date
+- `Published (Oldest first)`: ascending by publish date
+
+### 🎯 Filtering
+- Only videos with at least 181 seconds
+- Detected shorts/short-form content is filtered out
+- Already pushed/seen videos are skipped
+
+### 🧪 Testing
+- `npm test`
+- `npm run test:coverage`
+
+### ⚠️ Troubleshooting
+- Every interaction is answered exactly once
+- For W2G `403`: verify room membership and `W2G_ROOM_ID`
+- Missing env values trigger fail-fast startup errors
+
+### 📂 File Structure (Short)
+- `index.js` - Discord setup and routing
+- `youtube.js` - YouTube resolution and API requests
+- `w2g_push.js` - Watch2Gether push/validation
+- `w2g_history.js` - seen/push history
+- `queue_builder.js` - queue logic wrapper
+- `categories.js` - category/channel persistence
+
+## Contributing
+
+PRs are welcome. Please include tests and a short description.
+
+## License
+
 ISC
