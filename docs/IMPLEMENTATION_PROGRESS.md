@@ -68,6 +68,6 @@
 - Migrationen:
   - 001_initial_schema
 - Bekannte Einschränkungen:
-  - Die SQLite-Grundlage ist implementiert, aber noch nicht mit den bestehenden Bot-Services verbunden.
+  - Die SQLite-Grundlage ist implementiert und die bestehenden Bot-Services nutzen die neuen Module teilweise bereits über die Refactor-Schicht.
 - Abweichungen vom Backlog:
   - Keine

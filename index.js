@@ -15,6 +15,9 @@ import { safeReply, safeDeferReply } from './interaction_utils.js';
 import { ConfigValidationError, loadConfig } from './src/config/config.js';
 import { createApplication } from './src/app/createApplication.js';
 import { createCommandDefinitions } from './src/discord/commandDefinitions.js';
+import { createAuthorizationService } from './src/services/authorizationService.js';
+import { buildMemberContext } from './src/discord/memberContext.js';
+import { createFlowSessionStore } from './src/services/flowSessionStore.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
@@ -26,6 +29,8 @@ let rest = null;
 let app = null;
 let errorHandlersRegistered = false;
 const commands = createCommandDefinitions();
+const authorizationService = createAuthorizationService();
+const flowSessionStore = createFlowSessionStore({ storagePath: './data/flow-sessions.json' });
 
 function registerGlobalErrorHandlers() {
   if (errorHandlersRegistered) {
@@ -53,6 +58,8 @@ async function startApplication() {
 
   registerGlobalErrorHandlers();
 
+  authorizationService.configure(config);
+
   youtube.configureYouTubeService({ apiKey: config.youtube.apiKey });
   w2g.configureW2GService({
     apiKey: config.w2g.apiKey,
@@ -78,17 +85,22 @@ async function startApplication() {
 }
 
 // ==================== SESSION MANAGEMENT ====================
-const sessions = new Map(); // userId -> sessionData
-
-function getSession(userId) {
-  if (!sessions.has(userId)) {
-    sessions.set(userId, {});
+async function getSession(userId) {
+  const session = await flowSessionStore.getSession(userId);
+  if (session && typeof session === 'object' && !Array.isArray(session)) {
+    return session;
   }
-  return sessions.get(userId);
+  const fallback = {};
+  await flowSessionStore.saveSession(userId, fallback);
+  return fallback;
 }
 
-function clearSession(userId) {
-  sessions.delete(userId);
+async function saveSession(userId, session) {
+  await flowSessionStore.saveSession(userId, session);
+}
+
+async function clearSession(userId) {
+  await flowSessionStore.clearSession(userId);
 }
 
 // ==================== COMMAND REGISTRATION ====================
@@ -242,9 +254,10 @@ async function showMainMenu(interaction) {
 
 async function startTVFlow(interaction) {
   console.log(`\n📺 === TV START FLOW STARTED ===`);
-  clearSession(interaction.user.id);
-  const session = getSession(interaction.user.id);
+  await clearSession(interaction.user.id);
+  const session = await getSession(interaction.user.id);
   session.step = 'overview';
+  await flowSessionStore.saveSession(interaction.user.id, session);
 
   try {
     // STEP 1: Übersicht - Sammle Videos parallel
@@ -319,6 +332,7 @@ async function startTVFlow(interaction) {
     }
 
     session.categoryVideos = categoryVideos;
+    await saveSession(interaction.user.id, session);
     console.log(`  ✅ Schritt 1 fertig: ${totalVideos} Videos`);
 
     // Jetzt Antwort senden
@@ -337,7 +351,7 @@ async function startTVFlow(interaction) {
           )
         ]
       });
-      clearSession(interaction.user.id);
+      await clearSession(interaction.user.id);
       return;
     }
 
@@ -382,6 +396,7 @@ async function startTVFlow(interaction) {
     );
 
     session.step = 'watchtime';
+    await saveSession(interaction.user.id, session);
     await interaction.editReply({ 
       embeds: [embed],
       components: [row1, row2]
@@ -390,7 +405,7 @@ async function startTVFlow(interaction) {
     console.error(`❌ Fehler im TV-Start: ${error.message}`);
     console.error(error.stack);
     await interaction.editReply({ content: `❌ ${error.message}` });
-    clearSession(interaction.user.id);
+    await clearSession(interaction.user.id);
   }
 }
 
@@ -437,9 +452,9 @@ async function showAdminMenu(interaction) {
 async function showHelp(interaction) {
   const embed = new EmbedBuilder()
     .setTitle('📖 KRÜSTCHENTV BOT - KOMPLETTE ANLEITUNG')
-    .setDescription('Alle verfügbaren Slash Commands und Funktionen im Überblick')
+    .setDescription('Alle verfügbaren Slash Commands und Funktionen im Überblick. Diese Beta-Version ist für privaten Freundes- und Testbetrieb gedacht.')
     .setColor(0x2ECC71)
-    .addFields({ name: 'Version', value: 'Alpha 0.1', inline: false })
+    .addFields({ name: 'Version', value: 'Beta', inline: false })
     .addFields(
       {
         name: '⚡ Verfügbare Slash Commands',
@@ -620,15 +635,22 @@ async function handleButtonPress(interaction, action, params) {
 }
 
 async function handleTVButton(interaction, params, userId) {
-  const session = getSession(userId);
+  const session = await getSession(userId);
   const target = params[0];
   console.log(`    🎬 TV Button: ${target}, Session Step: ${session.step}`);
 
   if (target === 'watchtime') {
+    const actionKey = `tv:watchtime:${params[1] || 'unknown'}:${userId}`;
+    if (!flowSessionStore.tryBeginAction(userId, actionKey, 2000)) {
+      await interaction.editReply({ content: '⏳ Eine Aktion läuft bereits. Bitte kurz warten.', flags: MessageFlags.Ephemeral });
+      return;
+    }
     const minutes = parseInt(params[1]);
     console.log(`    ⏱️ Watchtime: ${minutes} Min`);
     session.watchtime = minutes;
     session.step = 'categories';
+    await flowSessionStore.saveSession(userId, session);
+    flowSessionStore.finishAction(userId, actionKey);
     await showCategorySelection(interaction, session, userId);
     return;
   }
@@ -665,6 +687,7 @@ async function handleTVButton(interaction, params, userId) {
       session.selectedCategories = [...selected, catName];
     }
 
+    await flowSessionStore.saveSession(userId, session);
     await showCategorySelection(interaction, session, userId);
     return;
   }
@@ -677,6 +700,7 @@ async function handleTVButton(interaction, params, userId) {
     }
 
     session.step = 'strategy';
+    await flowSessionStore.saveSession(userId, session);
     await showStrategySelection(interaction, session, userId);
     return;
   }
@@ -686,6 +710,7 @@ async function handleTVButton(interaction, params, userId) {
     console.log(`    🎲 Strategie gewählt: ${strategy}`);
     session.strategy = strategy;
     session.step = 'confirm';
+    await flowSessionStore.saveSession(userId, session);
     await showQueuePreview(interaction, session, userId);
     return;
   }
@@ -693,6 +718,7 @@ async function handleTVButton(interaction, params, userId) {
   if (target === 'strategy_back') {
     console.log(`    ◀️ Zurück zur Kategorieauswahl`);
     session.step = 'categories';
+    await flowSessionStore.saveSession(userId, session);
     await showCategorySelection(interaction, session, userId);
     return;
   }
@@ -700,6 +726,7 @@ async function handleTVButton(interaction, params, userId) {
   if (target === 'confirm_push') {
     console.log(`    🚀 Push bestätigt`);
     session.step = 'build';
+    await flowSessionStore.saveSession(userId, session);
     await buildAndPushQueue(interaction, session, userId);
     return;
   }
@@ -707,6 +734,7 @@ async function handleTVButton(interaction, params, userId) {
   if (target === 'confirm_back') {
     console.log(`    ◀️ Zurück zur Strategie-Auswahl`);
     session.step = 'strategy';
+    await flowSessionStore.saveSession(userId, session);
     await showStrategySelection(interaction, session, userId);
     return;
   }
@@ -715,6 +743,7 @@ async function handleTVButton(interaction, params, userId) {
     console.log(`    ◀️ Zurück zu Watchtime`);
     session.step = 'watchtime';
     session.selectedCategories = [];
+    await flowSessionStore.saveSession(userId, session);
     
     // Re-show watchtime mit Übersicht
     const categoryVideos = session.categoryVideos || {};
@@ -788,7 +817,7 @@ async function handleTVButton(interaction, params, userId) {
 
   if (target === 'result_main') {
     console.log(`    ↩️ Zurück zum Hauptmenü`);
-    clearSession(userId);
+    await clearSession(userId);
     await showMainMenu(interaction);
     return;
   }
@@ -796,8 +825,24 @@ async function handleTVButton(interaction, params, userId) {
   console.warn(`    ⚠️ Unbekannte TV-Action: ${target}`);
 }
 
+function ensureAdminAccess(interaction, action) {
+  const memberContext = buildMemberContext(interaction);
+  const allowed = authorizationService.can(action, memberContext);
+  if (!allowed) {
+    throw new Error('Nur Admins dürfen diese Aktion ausführen');
+  }
+  return memberContext;
+}
+
 async function handleAdminButton(interaction, params, userId) {
   const target = params[0];
+
+  try {
+    ensureAdminAccess(interaction, 'admin.write');
+  } catch (error) {
+    await interaction.editReply({ content: `❌ ${error.message}`, flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   switch (target) {
     case 'main':
@@ -821,6 +866,13 @@ async function handleAdminButton(interaction, params, userId) {
 
 async function handleMaintenanceButton(interaction, params, userId) {
   const target = params[0];
+
+  try {
+    ensureAdminAccess(interaction, 'maintenance.execute');
+  } catch (error) {
+    await interaction.editReply({ content: `❌ ${error.message}`, flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   switch (target) {
     case 'health':
@@ -1279,7 +1331,7 @@ async function buildAndPushQueue(interaction, session, userId) {
     }
 
     await interaction.editReply({ embeds: [resultEmbed], components });
-    clearSession(userId);
+    await clearSession(userId);
     console.log(`  📺 === TV START FLOW COMPLETED ===\n`);
   } catch (error) {
     console.error(`❌ Fehler beim Build/Push: ${error.message}`);
@@ -1738,8 +1790,9 @@ async function handleSelectMenu(interaction, action, params) {
   if (action === 'cat:rename_select') {
     const oldName = decodeURIComponent(interaction.values[0]);
     console.log(`    ✏️ Rename vorbereitet: "${oldName}" → Modal`);
-    const session = getSession(userId);
+    const session = await getSession(userId);
     session.renameFrom = oldName;
+    await saveSession(userId, session);
 
     const renModal = new ModalBuilder()
       .setCustomId(`cat_rename_modal_${userId}`)
@@ -1787,9 +1840,10 @@ async function handleSelectMenu(interaction, action, params) {
   if (action === 'ch:move_select') {
     const [catName, chId] = interaction.values[0].split(':');
     console.log(`    🔀 Move Channel: "${chId}" von "${decodeURIComponent(catName)}" → Zielwahl`);
-    const session = getSession(userId);
+    const session = await getSession(userId);
     session.moveChId = chId;
     session.moveFromCat = decodeURIComponent(catName);
+    await saveSession(userId, session);
 
     const movCats = await categories.getCategories();
     const otherCats = Object.keys(movCats).filter(c => c !== session.moveFromCat);
@@ -1830,7 +1884,7 @@ async function handleSelectMenu(interaction, action, params) {
 
   // Channel move - target
   if (action === 'ch:move_target') {
-    const session = getSession(userId);
+    const session = await getSession(userId);
     const tgtCat = decodeURIComponent(interaction.values[0]);
     console.log(`    ✅ Channel verschoben: "${session.moveChId}" von "${session.moveFromCat}" → "${tgtCat}"`);
 
@@ -1860,7 +1914,7 @@ async function handleSelectMenu(interaction, action, params) {
 
   // Channel add - select category (nach Modal)
   if (action === 'ch:add_select') {
-    const session = getSession(userId);
+    const session = await getSession(userId);
     const catName = decodeURIComponent(interaction.values[0]);
     console.log(`    ✅ Channel hinzufügen: "${session.newChName}" → "${catName}"`);
 
@@ -1911,7 +1965,7 @@ async function handleModalSubmit(interaction, action, params) {
     return;
   }
 
-  const session = getSession(userId);
+  const session = await getSession(userId);
 
   if (action === 'tv_watchtime_modal') {
     const minutes = parseInt(interaction.fields.getTextInputValue('minutes'));
@@ -1925,6 +1979,7 @@ async function handleModalSubmit(interaction, action, params) {
 
     session.watchtime = minutes;
     session.step = 'categories';
+    await saveSession(userId, session);
     await showCategorySelection(interaction, session, userId);
     return;
   }
@@ -2038,6 +2093,7 @@ async function handleModalSubmit(interaction, action, params) {
     // Channel-Daten in Session speichern
     session.newChId = chId;
     session.newChName = chName;
+    await saveSession(userId, session);
 
     // Kategorien laden und Dropdown anzeigen
     const allCats = await categories.getCategories();

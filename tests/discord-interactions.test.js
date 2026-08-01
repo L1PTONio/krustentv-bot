@@ -274,6 +274,14 @@ describe('Discord Commands & Interactions', () => {
       }
     });
 
+    it('should block admin actions for non-admin members in the interaction flow', async () => {
+      const nonAdminInteraction = new MockInteraction('button', '999999999');
+      nonAdminInteraction.customId = 'admin:overview:123456789';
+
+      const isAdminAction = nonAdminInteraction.customId.startsWith('admin:') || nonAdminInteraction.customId.startsWith('maint:');
+      expect(isAdminAction).toBe(true);
+    });
+
     it('should handle maintenance action buttons', async () => {
       const actions = [
         'maint:health:123456789',

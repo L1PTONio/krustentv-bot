@@ -85,7 +85,6 @@ function buildQueue(candidates, options = {}) {
   const orderedCandidates = strategy === 'shuffle' ? shuffleArray(normalizedCandidates, random) : normalizedCandidates;
   const queue = [];
   let totalSeconds = 0;
-  let oversizeCount = 0;
 
   for (const candidate of orderedCandidates) {
     if (candidate.durationSeconds > targetSeconds + toleranceSeconds) {
@@ -102,7 +101,6 @@ function buildQueue(candidates, options = {}) {
     if (queue.length === 0 && allowSingleOversize && candidate.durationSeconds <= targetSeconds + toleranceSeconds) {
       queue.push(candidate);
       totalSeconds += candidate.durationSeconds;
-      oversizeCount += 1;
       continue;
     }
 

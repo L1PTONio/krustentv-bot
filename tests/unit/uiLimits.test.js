@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { MAX_EMBED_FIELDS, MAX_COMPONENT_ROWS, MAX_SELECT_OPTIONS, MAX_EMBED_DESCRIPTION_LENGTH, MAX_EMBED_TITLE_LENGTH, MAX_CONTENT_LENGTH } from '../../src/discord/ui/limits.js';
+import { MAX_EMBED_FIELDS, MAX_COMPONENT_ROWS, MAX_SELECT_OPTIONS, MAX_EMBED_DESCRIPTION_LENGTH, MAX_CONTENT_LENGTH } from '../../src/discord/ui/limits.js';
 import { truncate, safeDescription, splitTextIntoPages } from '../../src/discord/ui/text.js';
 
 describe('discord ui limits', () => {

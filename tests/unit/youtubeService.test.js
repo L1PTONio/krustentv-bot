@@ -32,4 +32,13 @@ describe('TD-007 youtube service safety', () => {
     const service = createSafeYouTubeService({ apiKey: 'abc', fetchImpl, requestTimeoutMs: 1 });
     await expect(service.getVideoDetailsBatch(['video-1'])).rejects.toBeInstanceOf(ExternalServiceError);
   });
+
+  it('rejects empty video and channel IDs before any request is sent', async () => {
+    const fetchImpl = jest.fn(async () => ({ ok: true, json: async () => ({ items: [] }) }));
+    const service = createSafeYouTubeService({ apiKey: 'abc', fetchImpl });
+
+    await expect(service.getChannelInfo('   ')).rejects.toBeInstanceOf(ExternalServiceError);
+    await expect(service.getVideoDetails('')).rejects.toBeInstanceOf(ExternalServiceError);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { Routes } from 'discord.js';
 import { createApplication } from '../../src/app/createApplication.js';
 import { createCommandDefinitions } from '../../src/discord/commandDefinitions.js';
 import { createLegacyBotController } from '../../src/discord/legacyBotController.js';
@@ -67,7 +68,38 @@ describe('TD-003 bootstrap factory', () => {
     await app.registerCommands();
 
     expect(rest.put).toHaveBeenCalledWith(
-      expect.stringContaining('guilds/guild-1/commands'),
+      Routes.applicationGuildCommands('123', 'guild-1'),
+      expect.anything()
+    );
+  });
+
+  it('skips command registration when the client id is missing', async () => {
+    const app = createApplication({
+      config: { discord: { token: 'token', clientId: '', guildId: null }, registerCommandsOnStart: true },
+      client,
+      rest,
+      logger,
+      commandDefinitions: createCommandDefinitions()
+    });
+
+    await app.registerCommands();
+
+    expect(rest.put).not.toHaveBeenCalled();
+  });
+
+  it('registers global commands with the application route helper', async () => {
+    const app = createApplication({
+      config: { discord: { token: 'token', clientId: '123', guildId: null }, registerCommandsOnStart: false },
+      client,
+      rest,
+      logger,
+      commandDefinitions: createCommandDefinitions()
+    });
+
+    await app.registerCommands();
+
+    expect(rest.put).toHaveBeenCalledWith(
+      Routes.applicationCommands('123'),
       expect.anything()
     );
   });

@@ -87,11 +87,21 @@ function buildYouTubeUrl(path, apiKey) {
   return url.toString();
 }
 
+function normalizeRequestTimeoutMs(requestTimeoutMs) {
+  const parsed = Number(requestTimeoutMs);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 10000;
+  }
+  return Math.min(600000, Math.max(1, parsed));
+}
+
 export function createSafeYouTubeService({ apiKey = '', requestTimeoutMs = 10000, fetchImpl = fetch } = {}) {
+  const resolvedTimeoutMs = normalizeRequestTimeoutMs(requestTimeoutMs);
+
   async function requestJson(rawUrl, options = {}) {
     const url = validateYouTubeUrl(rawUrl);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+    const timer = setTimeout(() => controller.abort(), resolvedTimeoutMs);
 
     try {
       const response = await fetchImpl(url.toString(), { ...options, signal: controller.signal, headers: { ...(options.headers || {}), 'User-Agent': 'KrustenTV-Bot/1.0' } });
@@ -116,12 +126,20 @@ export function createSafeYouTubeService({ apiKey = '', requestTimeoutMs = 10000
   }
 
   async function getChannelInfo(channelId) {
+    if (!channelId || typeof channelId !== 'string' || !channelId.trim()) {
+      throw new ExternalServiceError('YouTube channel ID is required');
+    }
+
     const data = await requestJson(buildYouTubeUrl(`/channels?part=snippet&id=${encodeURIComponent(channelId)}`, apiKey));
     const item = Array.isArray(data?.items) && data.items.length > 0 ? data.items[0] : null;
     return item ? { id: item.id, name: item.snippet?.title || null } : null;
   }
 
   async function getChannelVideos(channelId, maxResults = 50) {
+    if (!channelId || typeof channelId !== 'string' || !channelId.trim()) {
+      throw new ExternalServiceError('YouTube channel ID is required');
+    }
+
     const resolvedId = channelId;
     const channelData = await requestJson(buildYouTubeUrl(`/channels?part=contentDetails&id=${encodeURIComponent(resolvedId)}`, apiKey));
     const channelItem = Array.isArray(channelData?.items) && channelData.items.length > 0 ? channelData.items[0] : null;
@@ -145,6 +163,10 @@ export function createSafeYouTubeService({ apiKey = '', requestTimeoutMs = 10000
   }
 
   async function getVideoDetails(videoId) {
+    if (!videoId || typeof videoId !== 'string' || !videoId.trim()) {
+      throw new ExternalServiceError('YouTube video ID is required');
+    }
+
     const data = await requestJson(buildYouTubeUrl(`/videos?part=contentDetails,statistics&id=${encodeURIComponent(videoId)}`, apiKey));
     const item = Array.isArray(data?.items) && data.items.length > 0 ? data.items[0] : null;
     if (!item) {

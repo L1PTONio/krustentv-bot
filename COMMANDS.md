@@ -1,5 +1,7 @@
 # KrüstchenTV Bot - Slash Commands Übersicht
 
+> Beta-Status: Diese Übersicht gilt für die aktuelle Beta-Version des Bots, die vor allem für privaten Freundes- und Testbetrieb gedacht ist.
+
 ## ✅ Alle verfügbaren `/krustentv` Befehle
 
 ### 🔧 System & Diagnose

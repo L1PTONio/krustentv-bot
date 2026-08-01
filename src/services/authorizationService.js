@@ -1,7 +1,13 @@
-export function createAuthorizationService({ config = {}, userRepository = null } = {}) {
-  const adminAllowAllMembers = Boolean(config.admin?.allowAllMembers);
-  const adminUserIds = Array.isArray(config.admin?.userIds) ? config.admin.userIds : [];
-  const adminRoleIds = Array.isArray(config.admin?.roleIds) ? config.admin.roleIds : [];
+export function createAuthorizationService({ config = {} } = {}) {
+  let adminAllowAllMembers = Boolean(config.admin?.allowAllMembers);
+  let adminUserIds = Array.isArray(config.admin?.userIds) ? config.admin.userIds : [];
+  let adminRoleIds = Array.isArray(config.admin?.roleIds) ? config.admin.roleIds : [];
+
+  function configure(nextConfig = {}) {
+    adminAllowAllMembers = Boolean(nextConfig.admin?.allowAllMembers);
+    adminUserIds = Array.isArray(nextConfig.admin?.userIds) ? nextConfig.admin.userIds : [];
+    adminRoleIds = Array.isArray(nextConfig.admin?.roleIds) ? nextConfig.admin.roleIds : [];
+  }
 
   function isAdminMember(member = {}) {
     if (!member || typeof member !== 'object') {
@@ -28,6 +34,11 @@ export function createAuthorizationService({ config = {}, userRepository = null 
     if (!member?.guildId) {
       return false;
     }
+
+    if (getPolicyFor(action) !== 'admin') {
+      return true;
+    }
+
     return isAdminMember(member);
   }
 
@@ -38,6 +49,7 @@ export function createAuthorizationService({ config = {}, userRepository = null 
   return {
     can,
     isAdminMember,
-    getPolicyFor
+    getPolicyFor,
+    configure
   };
 }

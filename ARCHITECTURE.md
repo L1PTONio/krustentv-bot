@@ -1,10 +1,12 @@
 # 🎬 KrüstchenTV Bot - Neue Architektur
 
 ## Übersicht
-Der Bot folgt einer **strikten hierarchischen Navigation** mit drei Hauptbereiche:
+Der Bot folgt einer **strikten hierarchischen Navigation** mit drei Hauptbereichen:
 - 🎬 **TV START** - Nutzer-Selbstbedienung
 - 🛠️ **ADMIN** - Verwaltungsfunktionen
 - ❓ **HILFE** - Kurze Übersicht
+
+Der aktuelle Stand ist ein **Teil-Refactor**: Die neue Architektur lebt unter `src/`, während der Legacy-Flow in `index.js` weiterhin die UI- und Interaktionslogik steuert.
 
 ## Struktur-Prinzipien
 ✅ **Keine Sackgassen** – Jede Ansicht hat einen Zurück-Button
@@ -128,6 +130,8 @@ clearSession(userId)
 /krustentv help     → Hilfe anzeigen
 ```
 
+Die erweiterten Verwaltungsfunktionen laufen aktuell über die Menü-UI und Buttons/Modals, nicht über zusätzliche Slash-Subcommands.
+
 ---
 
 ## Button ID Schema
@@ -209,9 +213,7 @@ ch:add_modal:userId
 npm test
 ```
 
-✅ 7 Tests, 2 Suites (w2g_history, categories)
-- queue_builder Tests ausstehend
-- Integration Tests ausstehend
+Die aktuelle Testbasis umfasst bereits Unit-Tests für Config, Repositories, Services, Queue-Builder und Discord-Interaktionen.
 
 ---
 

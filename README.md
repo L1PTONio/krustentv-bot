@@ -1,6 +1,8 @@
 # KrüstchenTV Bot
 
-Ein stabiler Discord-Bot, der automatisch neue YouTube‑Videos sammelt und per Watch2Gether API in einen festen Raum pusht.
+Ein stabiler, aber noch beta-gestützter Discord-Bot, der automatisch neue YouTube‑Videos sammelt und per Watch2Gether API in einen festen Raum pusht.
+
+> Beta-Status: Dieser Bot ist aktuell als Beta-Version gedacht und eignet sich für den privaten Freundes-/Testbetrieb, nicht als vollständig abgesicherter Produktivbetrieb.
 
 ## 🔧 Features
 - Automatische Suche nach neuen Videos pro Kategorie/Channel
@@ -63,22 +65,22 @@ npm start
 
 Für schnelle Slash-Command-Entwicklung: setze `DISCORD_GUILD_ID` → Commands werden direkt in dieser Guild registriert.
 
+## 🚀 Hosting auf bot-hosting.net
+Für den Beta-Deploy auf bot-hosting.net sind folgende Punkte wichtig:
+- Node.js 20+ verwenden
+- `npm install` als Installationsbefehl setzen
+- `npm start` als Startbefehl setzen
+- Eine `.env`-Datei mit den echten Secrets im Host-Setup hinterlegen
+- Für den ersten Beta-Deploy empfiehlt sich `W2G_DRY_RUN=true`, bis der Live-Flow stabil geprüft ist
+
+Weitere Details sind in [docs/BOT_HOSTING_NET.md](docs/BOT_HOSTING_NET.md) beschrieben. Für die Beta-Funktionsprüfung und den späteren GitHub-Deploy-Flow steht zusätzlich [docs/BETA_FUNCTIONALITY_CHECKLIST.md](docs/BETA_FUNCTIONALITY_CHECKLIST.md) zur Verfügung. Für den operativen Betrieb der Beta-Phase ergänzt [docs/BETA_OPERATIONS_CHECKLIST.md](docs/BETA_OPERATIONS_CHECKLIST.md) die Checkliste. Für den finalen Abschluss- und Go-Live-Check steht [docs/BETA_RELEASE_CHECKLIST.md](docs/BETA_RELEASE_CHECKLIST.md) bereit.
+
 ## 📥 Verfügbare Slash-Commands (`/krustentv`)
+- `/krustentv menu` — öffnet das aktuelle Hauptmenü mit TV-, Admin- und Hilfe-Aktionen
 - `/krustentv ping` — prüft Bot-Verbindung
-- `/krustentv test_w2g` — Testet Watch2Gether Verbindung
-- `/krustentv start` — startet den interaktiven Push-Dialog (inkl. Playback-Modus: Shuffle / Category Blocks / Manuelle Reihenfolge)
-- `/krustentv overview` — zeigt Kategorien & Channels
+- `/krustentv help` — zeigt die aktuelle Hilfeseite mit Version
 
-Kategorie-Management:
-- `/krustentv category_list`
-- `/krustentv category_add name`
-- `/krustentv category_rename old new`
-- `/krustentv category_delete name` (nur wenn leer)
-
-Channel-Management:
-- `/krustentv channel_list category`
-- `/krustentv channel_add category input` (URL / ID / @Handle)
-- `/krustentv channel_remove category channel_id`
+> Hinweis: Die älteren Direkt-Subcommands wie `start`, `overview`, `category_*` und `channel_*` sind im aktuellen Refactor nicht mehr als eigene Slash-Commands registriert; sie werden über das Menü und die Button-/Modal-Interaktionen gesteuert.
 
 ## 🔁 Datenmodell (Kurz)
 - `categories.json` enthält Objekt mit Kategorien → Channels (siehe Datei im Repo)

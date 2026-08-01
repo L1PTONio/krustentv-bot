@@ -9,8 +9,9 @@ describe('authorization service', () => {
     expect(service.can('admin.write', { guildId: 'g1', roleIds: ['r1'] })).toBe(true);
   });
 
-  it('blocks non-admins and dms', () => {
+  it('allows regular members for non-admin actions and blocks dms', () => {
     const service = createAuthorizationService({ config: { admin: { userIds: [], roleIds: [] } } });
+    expect(service.can('member.read', { guildId: 'g1', userId: 'u2' })).toBe(true);
     expect(service.can('admin.write', { guildId: 'g1', userId: 'u2' })).toBe(false);
     expect(service.can('admin.write', { guildId: null, userId: 'u2' })).toBe(false);
   });

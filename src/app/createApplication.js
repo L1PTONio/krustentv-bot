@@ -1,3 +1,4 @@
+import { Routes } from 'discord.js';
 import { createLegacyBotController } from '../discord/legacyBotController.js';
 import { createCommandDefinitions } from '../discord/commandDefinitions.js';
 
@@ -59,14 +60,14 @@ export function createApplication({
   }
 
   async function registerCommands() {
-    if (!rest?.put) {
+    if (!rest?.put || !effectiveConfig.discord.clientId) {
       return;
     }
 
     const body = Array.isArray(commandDefinitions) ? commandDefinitions : commandDefinitions();
     const route = effectiveConfig.discord.guildId
-      ? `guilds/${effectiveConfig.discord.guildId}/commands`
-      : 'applications/commands';
+      ? Routes.applicationGuildCommands(effectiveConfig.discord.clientId, effectiveConfig.discord.guildId)
+      : Routes.applicationCommands(effectiveConfig.discord.clientId);
 
     await rest.put(route, { body });
     logger.info?.('Commands registered');
