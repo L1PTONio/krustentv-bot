@@ -210,6 +210,10 @@ async function handleSlashCommand(interaction, subcommand) {
       console.log(`  ✅ Zeige Hilfe`);
       await showHelp(interaction);
       break;
+    case 'version':
+      console.log(`  ✅ Zeige Version`);
+      await showVersion(interaction);
+      break;
     default:
       console.warn(`  ⚠️ Unbekannter Subcommand: ${subcommand}`);
       await interaction.editReply({ content: '❌ Unbekannter Befehl' });
@@ -449,6 +453,19 @@ async function showAdminMenu(interaction) {
 }
 
 // ==================== HELP ====================
+async function showVersion(interaction) {
+  const version = '1.0.0-beta';
+  const embed = new EmbedBuilder()
+    .setTitle('🔢 KrüstchenTV Version')
+    .setDescription('Aktuelle Bot-Version')
+    .setColor(0x5865F2)
+    .addFields({ name: 'Version', value: version, inline: false })
+    .setFooter({ text: 'KrüstchenTV Bot' })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
 async function showHelp(interaction) {
   const embed = new EmbedBuilder()
     .setTitle('📖 KRÜSTCHENTV BOT - KOMPLETTE ANLEITUNG')

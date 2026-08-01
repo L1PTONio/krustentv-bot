@@ -8,6 +8,7 @@ export function createCommandDefinitions() {
       .addSubcommand(sub => sub.setName('menu').setDescription('Hauptmenü öffnen'))
       .addSubcommand(sub => sub.setName('ping').setDescription('Bot-Test'))
       .addSubcommand(sub => sub.setName('help').setDescription('Hilfe anzeigen'))
+      .addSubcommand(sub => sub.setName('version').setDescription('Aktuelle Bot-Version anzeigen'))
   ].map(cmd => cmd.toJSON());
 
   return commands;
