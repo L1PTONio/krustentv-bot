@@ -1,0 +1,73 @@
+# Implementation Progress
+
+## TD-002 – Zentrale, validierte Konfiguration
+- Status: Abgeschlossen
+- Startdatum: 2026-08-01
+- Abschlussdatum: 2026-08-01
+- Commit-Hash: Nicht erstellt (lokaler Git-Client derzeit nicht verfügbar in der Shell)
+- Geänderte Hauptkomponenten:
+  - src/config/config.js
+  - index.js
+  - youtube.js
+  - w2g_push.js
+  - tests/unit/config.test.js
+  - docs/BASELINE.md
+- Ausgeführte Prüfungen:
+  - npm.cmd run check
+- Tatsächliche Testergebnisse:
+  - 8 Test-Suites, 77 Tests, 0 fehlgeschlagene Tests
+- Coverage nach Abschluss:
+  - Nicht neu gemessen; die letzte verifizierte Laufzeit war Teil des Gesamtchecks und zeigte die bereits im Prompt genannten Werte.
+- Migrationen:
+  - Keine Datenbankmigrationen in TD-002
+- Bekannte Einschränkungen:
+  - Git war in der verfügbaren PowerShell-Umgebung nicht auffindbar, deshalb konnte kein lokaler Commit erstellt werden.
+- Abweichungen vom Backlog:
+  - Keine
+
+## TD-003 – Nebenwirkungsfreier Bootstrap und Application Factory
+- Status: Abgeschlossen
+- Startdatum: 2026-08-01
+- Abschlussdatum: 2026-08-01
+- Commit-Hash: Nicht erstellt (lokaler Git-Client derzeit nicht verfügbar in der Shell)
+- Geänderte Hauptkomponenten:
+  - src/app/createApplication.js
+  - src/discord/commandDefinitions.js
+  - src/discord/legacyBotController.js
+  - index.js
+  - tests/unit/bootstrap.test.js
+- Ausgeführte Prüfungen:
+  - npm.cmd test -- --runInBand tests/unit/bootstrap.test.js
+  - npm.cmd run check
+- Tatsächliche Testergebnisse:
+  - 8 Test-Suites, 76 Tests, 0 fehlgeschlagene Tests
+- Coverage nach Abschluss:
+  - Nicht neu gemessen; der vollständige Check lief erfolgreich durch.
+- Migrationen:
+  - Keine Datenbankmigrationen in TD-003
+- Bekannte Einschränkungen:
+  - Der eigentliche Produktivstart ist weiterhin über den bestehenden Einstiegspunkt [index.js](index.js) gesteuert; die Factory selbst ist für Tests und Import-Sicherheit vorbereitet.
+- Abweichungen vom Backlog:
+  - Keine
+
+## TD-004 – SQLite-Grundlage und Migration Runner
+- Status: In Arbeit
+- Startdatum: 2026-08-01
+- Abschlussdatum: 2026-08-01
+- Commit-Hash: Nicht erstellt (lokaler Git-Client derzeit nicht verfügbar in der Shell)
+- Geänderte Hauptkomponenten:
+  - src/db/database.js
+  - src/db/migrationRunner.js
+  - src/db/migrations/001_initial_schema.js
+  - tests/unit/database.test.js
+- Ausgeführte Prüfungen:
+  - npm.cmd test -- --runInBand tests/unit/database.test.js
+  - npm.cmd run check
+- Tatsächliche Testergebnisse:
+  - Laufend geprüft; der neue Test wird mit dem Gesamtcheck verifiziert.
+- Migrationen:
+  - 001_initial_schema
+- Bekannte Einschränkungen:
+  - Die SQLite-Grundlage ist implementiert, aber noch nicht mit den bestehenden Bot-Services verbunden.
+- Abweichungen vom Backlog:
+  - Keine

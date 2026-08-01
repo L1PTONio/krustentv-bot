@@ -100,7 +100,8 @@ class MockEmbedBuilder {
   }
 
   addFields(fields) {
-    this.fields.push(...fields);
+    const items = Array.isArray(fields) ? fields : [fields];
+    this.fields.push(...items);
     return this;
   }
 
@@ -157,6 +158,14 @@ describe('Discord Commands & Interactions', () => {
       });
 
       expect(interaction.lastReply.embeds[0].title).toContain('HILFE');
+    });
+
+    it('should include the current version in the help embed', async () => {
+      const helpEmbed = new MockEmbedBuilder()
+        .setTitle('📖 KRÜSTCHENTV BOT - KOMPLETTE ANLEITUNG')
+        .addFields({ name: 'Version', value: 'Alpha 0.1', inline: false });
+
+      expect(helpEmbed.fields[0].value).toBe('Alpha 0.1');
     });
   });
 

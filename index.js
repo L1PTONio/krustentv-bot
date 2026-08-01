@@ -1,6 +1,7 @@
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import {
-  Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
+  Client, GatewayIntentBits, REST, Routes,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
   TextInputBuilder, TextInputStyle, EmbedBuilder, MessageFlags,
   StringSelectMenuBuilder
@@ -11,26 +12,70 @@ import * as w2g from './w2g_push.js';
 import * as history from './w2g_history.js';
 import { buildWeightedQueue } from './queue_builder.js';
 import { safeReply, safeDeferReply } from './interaction_utils.js';
+import { ConfigValidationError, loadConfig } from './src/config/config.js';
+import { createApplication } from './src/app/createApplication.js';
+import { createCommandDefinitions } from './src/discord/commandDefinitions.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
 });
 
-// ==================== ENVIRONMENT VALIDATION ====================
-const requiredEnv = ['DISCORD_TOKEN','DISCORD_CLIENT_ID','YOUTUBE_API_KEY','W2G_API_KEY','W2G_ROOM_ID'];
-const missingEnv = requiredEnv.filter(k => !process.env[k]);
-if (missingEnv.length > 0) {
-  console.error(`❌ Fehlende Environment-Variablen: ${missingEnv.join(', ')}`);
-  process.exit(1);
+// ==================== CONFIGURATION ====================
+let config = null;
+let rest = null;
+let app = null;
+let errorHandlersRegistered = false;
+const commands = createCommandDefinitions();
+
+function registerGlobalErrorHandlers() {
+  if (errorHandlersRegistered) {
+    return;
+  }
+  errorHandlersRegistered = true;
+  process.on('unhandledRejection', (reason, p) => {
+    console.error('❌ Unhandled Rejection:', p, 'reason:', reason);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('❌ Uncaught Exception:', err);
+  });
 }
 
-// Global error handlers
-process.on('unhandledRejection', (reason, p) => {
-  console.error('❌ Unhandled Rejection:', p, 'reason:', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err);
-});
+async function startApplication() {
+  try {
+    config = loadConfig(process.env);
+  } catch (error) {
+    if (error instanceof ConfigValidationError) {
+      console.error('❌ Ungültige Konfiguration:', error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
+
+  registerGlobalErrorHandlers();
+
+  youtube.configureYouTubeService({ apiKey: config.youtube.apiKey });
+  w2g.configureW2GService({
+    apiKey: config.w2g.apiKey,
+    roomId: config.w2g.roomId,
+    dryRun: config.w2g.dryRun,
+    forceLive: config.w2g.forceLive,
+    debug: config.w2g.debug,
+    minRequestIntervalMs: config.w2g.minRequestIntervalMs
+  });
+
+  rest = new REST({ version: '10' }).setToken(config.discord.token);
+  app = createApplication({
+    config,
+    client,
+    rest,
+    logger: console,
+    commandDefinitions: commands
+  });
+
+  await registerCommands();
+  await client.login(config.discord.token);
+  return app;
+}
 
 // ==================== SESSION MANAGEMENT ====================
 const sessions = new Map(); // userId -> sessionData
@@ -47,29 +92,22 @@ function clearSession(userId) {
 }
 
 // ==================== COMMAND REGISTRATION ====================
-const commands = [
-  new SlashCommandBuilder()
-    .setName('krustentv')
-    .setDescription('KrüstchenTV Bot')
-    .addSubcommand(sub => sub.setName('menu').setDescription('Hauptmenü öffnen'))
-    .addSubcommand(sub => sub.setName('ping').setDescription('Bot-Test'))
-    .addSubcommand(sub => sub.setName('help').setDescription('Hilfe anzeigen'))
-].map(cmd => cmd.toJSON());
-
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
 const registerCommands = async () => {
+  if (!rest || !config) {
+    return;
+  }
+
   try {
     console.log('📝 Registriere Slash Commands...');
-    if (process.env.DISCORD_GUILD_ID) {
+    if (config.discord.guildId) {
       await rest.put(
-        Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID, process.env.DISCORD_GUILD_ID),
+        Routes.applicationGuildCommands(config.discord.clientId, config.discord.guildId),
         { body: commands }
       );
       console.log('✅ Commands für Guild registriert');
     } else {
       await rest.put(
-        Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
+        Routes.applicationCommands(config.discord.clientId),
         { body: commands }
       );
       console.log('✅ Commands global registriert');
@@ -79,8 +117,6 @@ const registerCommands = async () => {
     process.exit(1);
   }
 };
-
-registerCommands();
 
 // ==================== EVENT HANDLERS ====================
 client.once('clientReady', () => {
@@ -403,6 +439,7 @@ async function showHelp(interaction) {
     .setTitle('📖 KRÜSTCHENTV BOT - KOMPLETTE ANLEITUNG')
     .setDescription('Alle verfügbaren Slash Commands und Funktionen im Überblick')
     .setColor(0x2ECC71)
+    .addFields({ name: 'Version', value: 'Alpha 0.1', inline: false })
     .addFields(
       {
         name: '⚡ Verfügbare Slash Commands',
@@ -2076,4 +2113,11 @@ async function handleModalSubmit(interaction, action, params) {
 }
 
 // ==================== LOGIN ====================
-client.login(process.env.DISCORD_TOKEN);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startApplication().catch(error => {
+    console.error('❌ Fehler beim Starten der Anwendung:', error);
+    process.exit(1);
+  });
+}
+
+export { startApplication, app, client, config };

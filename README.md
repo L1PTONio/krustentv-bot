@@ -16,23 +16,42 @@ Ein stabiler Discord-Bot, der automatisch neue YouTube‑Videos sammelt und per 
 - YouTube Data API Key (v3)
 - Watch2Gether API Key + Room ID (streamkey)
 
-## 🔐 Benötigte Environment-Variablen
-Erstelle eine `.env` im Projektroot:
+## 🔐 Konfiguration und Environment-Variablen
+Erstelle eine `.env` im Projektroot. Die Werte werden zentral über die Konfigurationslogik geladen und validiert:
 
 ```env
+# Optional: defaults to development when empty or unset
+NODE_ENV=development
+
 DISCORD_TOKEN=bot_token_here
 DISCORD_CLIENT_ID=application_client_id
 # optional für schnelle Entwicklung (registriert nur in dieser Guild)
 DISCORD_GUILD_ID=guild_id_for_dev
+
 YOUTUBE_API_KEY=your_youtube_api_key
+YOUTUBE_REQUEST_TIMEOUT_MS=10000
+
 W2G_API_KEY=your_w2g_api_key
 W2G_ROOM_ID=streamkey_of_room
+W2G_DRY_RUN=false
+W2G_FORCE_LIVE=false
+W2G_REQUEST_TIMEOUT_MS=10000
+W2G_MIN_REQUEST_INTERVAL_MS=1000
+W2G_DEBUG=false
+
+# Optional: empty values fall back to the built-in defaults
+DATABASE_PATH=data/krustentv.sqlite
 # Optional: nur Videos berücksichtigen, die an/ab diesem Datum veröffentlicht wurden (ISO 8601)
 # Beispiel: MIN_VIDEO_PUBLISHED_AT=2026-01-01T00:00:00Z
 MIN_VIDEO_PUBLISHED_AT=2026-01-01T00:00:00Z
+
+ADMIN_USER_IDS=
+ADMIN_ROLE_IDS=
+ADMIN_ALLOW_ALL_MEMBERS=false
+SESSION_TTL_MINUTES=60
 ```
 
-> WICHTIG: `W2G_API_KEY` muss zu einem Account gehören, der Mitglied des Rooms ist.
+> WICHTIG: `W2G_API_KEY` muss zu einem Account gehören, der Mitglied des Rooms ist. Wenn `W2G_DRY_RUN=true`, werden echte Watch2Gether-POSTs übersprungen. Mit `W2G_FORCE_LIVE=true` wird Live-Push trotz Dry-Run erzwingt, sofern die nötigen Credentials gesetzt sind.
 
 ## Installation & Entwicklung
 ```bash
