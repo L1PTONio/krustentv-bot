@@ -63,6 +63,20 @@ describe('TD-002 config module', () => {
     expect(forceLiveConfig.w2g.dryRun).toBe(false);
   });
 
+  it('falls back to host-friendly aliases and defaults to dry-run when W2G credentials are absent', () => {
+    const config = loadConfig({
+      BOT_TOKEN: 'host-token',
+      CLIENT_ID: '123456789012345678',
+      YOUTUBE_KEY: 'host-youtube',
+      DRY_RUN: 'true'
+    });
+
+    expect(config.discord.token).toBe('host-token');
+    expect(config.discord.clientId).toBe('123456789012345678');
+    expect(config.youtube.apiKey).toBe('host-youtube');
+    expect(config.w2g.dryRun).toBe(true);
+  });
+
   it('parses supported boolean values case-insensitively', () => {
     const trueValues = ['true', ' TRUE ', '1', 'yes', 'on'];
     const falseValues = ['false', ' FALSE ', '0', 'no', 'off'];

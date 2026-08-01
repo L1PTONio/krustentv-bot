@@ -23,7 +23,8 @@ function normalizeString(value) {
 }
 
 function parseRequiredString(env, envVar, field, options = {}) {
-  const value = normalizeString(env[envVar]);
+  const aliases = Array.isArray(options.aliases) ? options.aliases : [];
+  const value = normalizeString(resolveEnvValue(env, [envVar, ...aliases]));
   if (value === undefined) {
     throw createFieldError(field, envVar, options.message || 'is required');
   }
@@ -31,15 +32,17 @@ function parseRequiredString(env, envVar, field, options = {}) {
 }
 
 function parseOptionalString(env, envVar, field, options = {}) {
-  const value = normalizeString(env[envVar]);
+  const aliases = Array.isArray(options.aliases) ? options.aliases : [];
+  const value = normalizeString(resolveEnvValue(env, [envVar, ...aliases]));
   if (value === undefined) {
     return options.defaultValue;
   }
   return value;
 }
 
-function parseBoolean(env, envVar, field, defaultValue = false) {
-  const value = env[envVar];
+function parseBoolean(env, envVar, field, defaultValue = false, options = {}) {
+  const aliases = Array.isArray(options.aliases) ? options.aliases : [];
+  const value = resolveEnvValue(env, [envVar, ...aliases]);
   if (value === undefined || value === null || value === '') {
     return defaultValue;
   }
@@ -126,6 +129,16 @@ function createFieldError(field, envVar, message) {
   return { field, envVar, message };
 }
 
+function resolveEnvValue(env, names) {
+  for (const name of names) {
+    const value = env?.[name];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function buildConfigFromEnv(env, options = {}) {
   const strict = options.strict !== false;
   const errors = [];
@@ -144,16 +157,16 @@ function buildConfigFromEnv(env, options = {}) {
   };
 
   const nodeEnv = parse(() => parseOptionalString(env, 'NODE_ENV', 'nodeEnv', { defaultValue: 'development' })) || 'development';
-  const discordToken = parse(() => parseRequiredString(env, 'DISCORD_TOKEN', 'discord.token', { message: 'is required' }));
-  const discordClientId = parse(() => parseRequiredString(env, 'DISCORD_CLIENT_ID', 'discord.clientId', { message: 'is required' }));
+  const discordToken = parse(() => parseRequiredString(env, 'DISCORD_TOKEN', 'discord.token', { message: 'is required', aliases: ['BOT_TOKEN'] }));
+  const discordClientId = parse(() => parseRequiredString(env, 'DISCORD_CLIENT_ID', 'discord.clientId', { message: 'is required', aliases: ['CLIENT_ID'] }));
   const discordGuildId = parse(() => parseOptionalString(env, 'DISCORD_GUILD_ID', 'discord.guildId'));
 
-  const youtubeApiKey = parse(() => parseRequiredString(env, 'YOUTUBE_API_KEY', 'youtube.apiKey', { message: 'is required' }));
+  const youtubeApiKey = parse(() => parseRequiredString(env, 'YOUTUBE_API_KEY', 'youtube.apiKey', { message: 'is required', aliases: ['YOUTUBE_KEY'] }));
   const youtubeRequestTimeoutMs = parse(() => parsePositiveInteger(env, 'YOUTUBE_REQUEST_TIMEOUT_MS', 'youtube.requestTimeoutMs', 10000, { max: 600000 }));
 
-  const w2gApiKey = parse(() => parseOptionalString(env, 'W2G_API_KEY', 'w2g.apiKey'));
-  const w2gRoomId = parse(() => parseOptionalString(env, 'W2G_ROOM_ID', 'w2g.roomId'));
-  let w2gDryRun = parse(() => parseBoolean(env, 'W2G_DRY_RUN', 'w2g.dryRun', false));
+  const w2gApiKey = parse(() => parseOptionalString(env, 'W2G_API_KEY', 'w2g.apiKey', { aliases: ['W2G_KEY'] }));
+  const w2gRoomId = parse(() => parseOptionalString(env, 'W2G_ROOM_ID', 'w2g.roomId', { aliases: ['ROOM_ID'] }));
+  let w2gDryRun = parse(() => parseBoolean(env, 'W2G_DRY_RUN', 'w2g.dryRun', false, { aliases: ['DRY_RUN'] }));
   const w2gForceLive = parse(() => parseBoolean(env, 'W2G_FORCE_LIVE', 'w2g.forceLive', false));
   const w2gRequestTimeoutMs = parse(() => parsePositiveInteger(env, 'W2G_REQUEST_TIMEOUT_MS', 'w2g.requestTimeoutMs', 10000, { max: 600000 }));
   const w2gMinRequestIntervalMs = parse(() => parsePositiveInteger(env, 'W2G_MIN_REQUEST_INTERVAL_MS', 'w2g.minRequestIntervalMs', 1000, { max: 600000 }));
