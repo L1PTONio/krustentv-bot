@@ -117,3 +117,17 @@ test('clearWatchHistory removes seen and pushed data', async () => {
   expect(await history.isVideoSeen('CLEAR_1')).toBe(false);
   expect(await history.getRecentPushedVideos(10)).toEqual([]);
 });
+
+test('getLastPushedAtForCategory returns last push timestamp per category', async () => {
+  await history.markVideosPushed([
+    { id: 'CAT_1', title: 'Cat one', publishedAt: '2026-08-01T10:00:00.000Z', category: 'memes' },
+    { id: 'CAT_2', title: 'Cat two', publishedAt: '2026-08-01T10:00:00.000Z', category: 'doku' }
+  ]);
+
+  const memesLast = await history.getLastPushedAtForCategory('memes');
+  const csLast = await history.getLastPushedAtForCategory('cs');
+
+  expect(typeof memesLast).toBe('string');
+  expect(new Date(memesLast).toString()).not.toBe('Invalid Date');
+  expect(csLast).toBeNull();
+});

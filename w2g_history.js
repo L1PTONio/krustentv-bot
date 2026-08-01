@@ -39,7 +39,8 @@ function normalizePushedEntries(entries) {
       id: item.id,
       title: typeof item.title === 'string' ? item.title : '',
       publishedAt: typeof item.publishedAt === 'string' ? item.publishedAt : null,
-      pushedAt: typeof item.pushedAt === 'string' ? item.pushedAt : null
+      pushedAt: typeof item.pushedAt === 'string' ? item.pushedAt : null,
+      category: typeof item.category === 'string' ? item.category : null
     }));
 }
 
@@ -127,7 +128,8 @@ export async function markVideosPushed(videos) {
       id: video.id,
       title: typeof video.title === 'string' ? video.title : '',
       publishedAt: typeof video.publishedAt === 'string' ? video.publishedAt : null,
-      pushedAt
+      pushedAt,
+      category: typeof video.category === 'string' ? video.category : null
     };
 
     history.seen[video.id] = {
@@ -156,6 +158,19 @@ export async function getRecentPushedVideos(limit = 20) {
   const parsedLimit = Number.parseInt(limit, 10);
   const safeLimit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(100, parsedLimit)) : 20;
   return history.pushed.slice(0, safeLimit);
+}
+
+/**
+ * Liefert den letzten Push-Zeitpunkt für eine Kategorie oder null.
+ */
+export async function getLastPushedAtForCategory(categoryName) {
+  if (!categoryName || typeof categoryName !== 'string') {
+    return null;
+  }
+
+  const history = await loadHistory();
+  const match = history.pushed.find(entry => entry.category === categoryName && typeof entry.pushedAt === 'string');
+  return match ? match.pushedAt : null;
 }
 
 /**

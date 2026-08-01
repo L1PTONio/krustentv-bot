@@ -386,6 +386,26 @@ function formatVideoLength(durationSeconds) {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+function formatPublishedAt(value) {
+  if (!value || typeof value !== 'string') {
+    return 'Unbekannt';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Unbekannt';
+  }
+
+  return parsed.toLocaleString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
+
 function truncateTitle(value, maxLength = 90) {
   const title = typeof value === 'string' ? value.trim() : '';
   if (!title) return 'Unbekanntes Video';
@@ -401,13 +421,19 @@ function buildDiscoverySections(discoveryData) {
     const header = `**${catName}** (${videos.length} Videos)`;
 
     if (videos.length === 0) {
-      sections.push(`${header}\n*(keine verfügbaren Videos)*`);
+      const lastPushedAt = formatPublishedAt(catData?.lastPushedAt);
+      if (lastPushedAt === 'Unbekannt') {
+        sections.push(`${header}\n*(keine verfügbaren Videos - bisher kein Push für diese Kategorie)*`);
+      } else {
+        sections.push(`${header}\n*(keine verfügbaren Videos seit dem letzten Push am ${lastPushedAt})*`);
+      }
       continue;
     }
 
     const lines = videos.map((video, index) => {
       const title = truncateTitle(video.title);
-      return `${index + 1}. ${title} (${formatVideoLength(video.duration)})`;
+      const publishedAt = formatPublishedAt(video.publishedAt);
+      return `${index + 1}. ${title} (${formatVideoLength(video.duration)})\n   Veröffentlicht: ${publishedAt}`;
     });
 
     let block = `${header}\n`;
@@ -513,7 +539,8 @@ async function collectDiscoveryData() {
     }));
 
     discoveryData[catName] = {
-      videos: enrichedVideos
+      videos: enrichedVideos,
+      lastPushedAt: await history.getLastPushedAtForCategory(catName)
     };
   });
 
