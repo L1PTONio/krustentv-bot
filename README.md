@@ -6,8 +6,10 @@ Ein stabiler, aber noch beta-gestützter Discord-Bot, der automatisch neue YouTu
 
 ## 🔧 Features
 - Automatische Suche nach neuen Videos pro Kategorie/Channel
-- Interaktiver Start‑Dialog (Watchtime, Kategorie‑Toggle, Bulk‑Push)
+- Interaktiver TV-Flow (Watchtime, Kategorie-Auswahl, Reihenfolge, Vorschau, Push)
 - Watch2Gether Bulk‑Push (max. 50 Items / Request)
+- Discovery-Ansicht mit verfügbaren (ungesehenen) Videos pro Kategorie
+- Push-History im Admin-Menü (mit Veröffentlichungs- und Push-Zeitpunkt)
 - Persistenz: `categories.json` + `w2g_history.json` (verhütet Doppelungen)
 - **Optionaler Zeit-Filter:** `MIN_VIDEO_PUBLISHED_AT` ermöglicht das Ignorieren von Videos, die vor einem konfigurierten Datum veröffentlicht wurden (nützlich, um alte/bereits verarbeitete Videos auszuschließen).
 - Sauberes Fehler‑Handling & UX‑konforme Interaction‑Antworten
@@ -79,20 +81,28 @@ Weitere Details sind in [docs/BOT_HOSTING_NET.md](docs/BOT_HOSTING_NET.md) besch
 - `/krustentv menu` — öffnet das aktuelle Hauptmenü mit TV-, Admin- und Hilfe-Aktionen
 - `/krustentv ping` — prüft Bot-Verbindung
 - `/krustentv help` — zeigt die aktuelle Hilfeseite mit Version
+- `/krustentv version` — zeigt die aktuell laufende Bot-Version
 
 > Hinweis: Die älteren Direkt-Subcommands wie `start`, `overview`, `category_*` und `channel_*` sind im aktuellen Refactor nicht mehr als eigene Slash-Commands registriert; sie werden über das Menü und die Button-/Modal-Interaktionen gesteuert.
 
 ## 🔁 Datenmodell (Kurz)
 - `categories.json` enthält Objekt mit Kategorien → Channels (siehe Datei im Repo)
-- `w2g_history.json` speichert bereits gepushte Video‑IDs und `lastCacheReset` (Cache gilt bis 12:00 Uhr)
+- `w2g_history.json` speichert bereits gepushte/gesehene Video‑IDs und Push-History
+- Gesehene Videos bleiben gefiltert, bis die Watch-History manuell gelöscht wird
 
 ## ▶️ Playback-Modi (Queue-Mix)
 Nach Auswahl von Watchtime und Kategorien kannst du wählen, wie die Videos abgespielt werden:
-- `Shuffle` (default): Kategorien werden fair gemischt (intern chronologisch)
-- `Category Blocks`: Kategorien werden blockweise (z.B. alphabetisch) abgespielt
-- `Manual Order`: Du legst die Kategorie-Reihenfolge explizit fest
+- `Shuffle` (default): Videos werden zufällig gemischt
+- `Category Blocks`: Videos werden blockweise nach Kategorien sortiert
+- `Veröffentlichung (Neueste zuerst)`: Sortierung nach Datum absteigend
+- `Veröffentlichung (Älteste zuerst)`: Sortierung nach Datum aufsteigend
 
 Diese Auswahl beeinflusst nur die Reihenfolge, nicht die Auswahl der Videos (die Queue-Auswahl respektiert weiterhin Gewichtungen und Watchtime).
+
+## 🎯 Aktuelle Filterlogik
+- Nur Videos ab 181 Sekunden werden berücksichtigt
+- Als Shorts/Kurzvideos erkannte Inhalte werden gefiltert
+- Bereits gepushte/gesehene Videos werden für Discovery und Queue übersprungen
 
 ## 🧭 Watch2Gether Hinweise
 - Es existiert genau **ein** Room (Room ID via `W2G_ROOM_ID`)
@@ -102,7 +112,9 @@ Diese Auswahl beeinflusst nur die Reihenfolge, nicht die Auswahl der Videos (die
 
 ## 🧪 Testing & Entwicklung
 - Für Integrationstests: setze `DISCORD_GUILD_ID` zum schnellen Command-Iterieren.
-- Unit‑Tests (noch zu ergänzen) — Vorschlag: Jest für `categories.js` & `w2g_history.js`.
+- Testen mit Jest:
+  - `npm test`
+  - `npm run test:coverage`
 
 ## ⚠️ Best Practices / Troubleshooting
 - Jede Interaction wird exakt einmal beantwortet (deferReply / editReply / followUp via helper).
